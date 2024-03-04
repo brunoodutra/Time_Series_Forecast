@@ -52,13 +52,13 @@ with st.sidebar:
 
     # Verificar se foram selecionadas até 5 ações
     if len(acoes_selecionadas) > 5:
-        st.warning("Por favor, selecione no máximo 5 ações.")
+        st.warning("Por favor, selecione no máximo 5 Ativos (opções: Ações, FIS, Cryptos).")
         acoes_selecionadas = acoes_selecionadas[:5]
 
 
 
 # Título do aplicativo
-st.title('Exemplo Análise exploratória e predição de Ações')
+st.title('Exemplo Análise exploratória e predição de Ativos')
 
 #%% Carregando dados
 #acoes_df=pd.read_csv('acoes.csv')
