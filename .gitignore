@@ -1,7 +1,9 @@
 /.ipynb_checkpoints
 *.csv
+.csv
 csv
 *.h5
+*.pb
 models/
 venv
 acoes/_pycache_/
