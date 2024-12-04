@@ -8,3 +8,4 @@ models/
 venv
 .venv
 acoes/_pycache_/
+*.pdf
