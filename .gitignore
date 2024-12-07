@@ -9,3 +9,5 @@ venv
 .venv
 acoes/_pycache_/
 *.pdf
+
+**/_pycache_/
