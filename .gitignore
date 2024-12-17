@@ -6,4 +6,5 @@ csv
 *.pb
 models/
 venv
+.venv
 acoes/_pycache_/
