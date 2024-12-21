@@ -6,227 +6,11 @@ from imblearn.over_sampling import SMOTE
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-
+from sklearn.utils import resample
+import requests
 from imblearn.over_sampling import RandomOverSampler 
 
-class ComputIdicators():
-     def __init__(self):
-          pass
-     def autorregressive_coefs(self,data,p=3):
-        channels=data.shape(self.axis) 
-
-        phi=np.zeros([data.shape[0],data.shape[1],p])
-
-        ar_coefs=np.zeros([channels,p])
-
-        y_init=[]
-
-        y = data
-
-        aux=np.zeros(p)
-        for k in range(p): 
-            aux[p-k:]=y[:k]
-            y_init.append(aux.copy())
-
-        phi=np.vstack([y[i-p:i] if i-p>=0 else y_init[i]  for i in range(0, len(y))])
-
-        ar_coefs[:]=np.linalg.inv(phi[:].T.dot(phi[:])).dot(phi[:].T.dot(data[:]))
-            
-        return ar_coefs
-     
-     def moving_average(self,data, window_length):
-          """
-          Calculates the Moving Average (MA) of a time series data.
-
-          Args:
-               data: A list or NumPy array containing the time series data.
-               window_length: The number of periods to use for the MA calculation (window size).
-
-          Returns:
-               A NumPy array containing the MA values for each data point.
-          """
-
-          if window_length < 1:
-               raise ValueError("Window length must be a positive integer.")
-
-          # Initialize empty array for MA values
-          moving_average_values = np.zeros(len(data))
-
-          # Iterate through the data
-          for i in range(len(data)):
-               # Check if the window goes beyond the data boundary
-               if i < window_length - 1:
-                    # If within the initial window, use the average of available data points
-                    moving_average_values[i] = np.mean(data[:i+1])
-               else:
-                    # For other points, use the average of the window
-                    window_slice = data[i - window_length + 1 : i + 1]
-                    moving_average_values[i] = np.mean(window_slice)
-
-          return moving_average_values
-     def exponential_moving_average(self, data, window_length):
-          """
-          Calculates the Exponential Moving Average (EMA) of a time series data.
-
-          Args:
-               data: A list or NumPy array containing the time series data.
-               window_length: The number of periods to use for the EMA calculation.
-
-          Returns:
-               A NumPy array containing the EMA values for each data point.
-          """
-
-          if window_length < 1:
-               raise ValueError("Window length must be a positive integer.")
-
-          ema = np.zeros(len(data))
-          # Handle the initial EMA calculation (use simple average for the first window_length elements)
-          ema[:window_length] = np.mean(data[:window_length])
-          alpha = 2 / (1 + window_length)  # Smoothing factor (weight for the current data point)
-
-          for i in range(window_length, len(data)):
-               ema[i] = alpha * data[i] + (1 - alpha) * ema[i-1]
-          
-          return ema
-
-     def macd(self,data, fast_period=12, slow_period=26, signal_period=9):
-          """
-          Calculates the MACD (Moving Average Convergence Divergence) indicator for a time series data.
-
-          Args:
-               data: A list or NumPy array containing the closing price data.
-               fast_period: The number of periods for the fast Exponential Moving Average (EMA). (default: 12)
-               slow_period: The number of periods for the slow Exponential Moving Average (EMA). (default: 26)
-               signal_period: The number of periods for the EMA of the MACD difference. (default: 9)
-
-          Returns:
-               A tuple containing three NumPy arrays:
-                    - macd: The MACD line (fast EMA minus slow EMA)
-                    - macd_signal: The signal line (EMA of the MACD difference)
-                    - macd_histogram: The MACD histogram (MACD minus signal line)
-          """
-
-          # Check if window lengths are positive integers
-          if any(period < 1 for period in [fast_period, slow_period, signal_period]):
-               raise ValueError("Window lengths must be positive integers.")
-
-          # Calculate the fast EMA and slow EMA
-          ema_fast = self.exponential_moving_average(data, fast_period)
-          ema_slow = self.exponential_moving_average(data, slow_period)
-
-          # Calculate the MACD line (fast EMA minus slow EMA)
-          macd = ema_fast - ema_slow
-
-          # Calculate the MACD signal line (EMA of the MACD difference)
-          macd_signal = self.exponential_moving_average(macd, signal_period)
-
-          # Calculate the MACD histogram (MACD minus signal line)
-          macd_histogram = macd - macd_signal
-
-          return macd, macd_signal, macd_histogram
-
-     def rsi(self, data, period=14, pred_days = 1):
-          if period < 1:
-               raise ValueError("Period must be a positive integer.")
-
-          delta=self.get_variations(data, days_lookback = pred_days)
-          # Calcular as diferenças dos preços
-          #delta = np.diff(data)
-
-               # Separar os ganhos e perdas
-          up_changes = np.where(delta > 0, delta, 0)
-          down_changes = np.where(delta < 0, np.abs(delta), 0)
-
-          # Calcular a média dos ganhos e perdas
-          avg_gain = np.zeros(len(up_changes))
-          avg_loss = np.zeros(len(down_changes))
-
-          # Calcular a média para os primeiros 'period' dados
-          avg_gain[:period] = np.cumsum(up_changes[:period]) / np.arange(1, period + 1)
-          avg_loss[:period] = np.cumsum(down_changes[:period]) / np.arange(1, period + 1)
-
-          # Calcular a média para o resto dos dados
-          for i in range(period, len(up_changes)):
-               avg_gain[i] = (avg_gain[i - 1] * (period - 1) + up_changes[i]) / period
-               avg_loss[i] = (avg_loss[i - 1] * (period - 1) + down_changes[i]) / period
-
-          # Calcular o Relative Strength (RS)
-          rs = avg_gain / avg_loss
-          rs = np.where(avg_loss == 0, np.inf, rs)
-
-          # Calcular o RSI
-          rsi = 100 - (100 / (1 + rs))
-
-          # Retornar os valores de RSI, começando do período especificado
-          #print('data',data.shape)
-          return np.array(np.zeros(period - 1).tolist() + rsi[period - 1:].tolist())
-
-
-     def cci(self, high_prices, low_prices, close_prices, window_length=20):
-          """
-          Calculates the Commodity Channel Index (CCI) indicator for a time series data.
-
-          Args:
-               high_prices: A list or NumPy array containing the high prices.
-               low_prices: A list or NumPy array containing the low prices.
-               close_prices: A list or NumPy array containing the closing prices.
-               window_length: The number of periods to use for the calculation. (default: 20)
-
-          Returns:
-               A NumPy array containing the CCI values for each data point.
-          """
-          typical_prices = (high_prices + low_prices + close_prices) / 3
-          sma_typical_prices = self.moving_average(typical_prices, window_length=window_length)
-          mean_deviation = np.mean(np.abs(typical_prices - sma_typical_prices))
-          cci_values = (typical_prices - sma_typical_prices) / (0.015 * mean_deviation)
-          
-          return cci_values
-     def stochastic(self, high_prices, low_prices, close_prices, window_length=14, smooth_k=3, smooth_d=3):
-          """
-          Calculates the Stochastic Oscillator indicator for a time series data.
-
-          Args:
-               high_prices: A list or NumPy array containing the high prices.
-               low_prices: A list or NumPy array containing the low prices.
-               close_prices: A list or NumPy array containing the closing prices.
-               window_length: The number of periods to use for the calculation. (default: 14)
-               smooth_k: The number of periods for smoothing %K line. (default: 3)
-               smooth_d: The number of periods for smoothing %D line. (default: 3)
-
-          Returns:
-               A tuple containing two NumPy arrays:
-                    - percent_k: The %K line.
-                    - percent_d: The %D line.
-          """
-
-          if window_length < 1 or smooth_k < 1 or smooth_d < 1:
-               raise ValueError("Window lengths must be positive integers.")
-
-          # Calculate %K
-          lowest_low = self.minimum(low_prices, window_length)
-          highest_high = self.maximum(high_prices, window_length)
-          percent_k = 100 * ((close_prices - lowest_low) / (highest_high - lowest_low))
-
-          # Smooth %K to get %D
-          percent_d = self.moving_average(percent_k, window_length=smooth_k)
-
-          return percent_k, percent_d
-     
-     def bollinger_bands(self, data, window_length=20, num_std=2):
-        if window_length < 1:
-            raise ValueError("Window length must be a positive integer.")
-        moving_average = self.moving_average(data, window_length)
-        std_deviation = np.zeros(len(data))
-        for i in range(len(data)):
-            if i < window_length - 1:
-                std_deviation[i] = np.std(data[:i+1])
-            else:
-                std_deviation[i] = np.std(data[i - window_length + 1: i + 1])
-        upper_band = moving_average + num_std * std_deviation
-        lower_band = moving_average - num_std * std_deviation
-
-        return moving_average, upper_band, lower_band
-     import numpy as np
+import sys
 
 class ComputIndicators():
     def __init__(self):
@@ -291,7 +75,8 @@ class ComputIndicators():
         for i in range(period, len(up_changes)):
             avg_gain[i + 1] = (avg_gain[i] * (period - 1) + up_changes[i]) / period
             avg_loss[i + 1] = (avg_loss[i] * (period - 1) + down_changes[i]) / period
-        rs = avg_gain / avg_loss
+        epsilon = 1e-8
+        rs = avg_gain / (avg_loss + epsilon)
         rs = np.where(avg_loss == 0, np.inf, rs)
         rsi = 100 - (100 / (1 + rs))
         return rsi
@@ -494,29 +279,86 @@ class ComputIndicators():
                 waves.append("Corrective Wave")
             # Add more wave patterns as needed
         return waves
+    
+    def chaikin_money_flow(self, high_prices, low_prices, close_prices, volumes, window_length=21):
+        if len(high_prices) != len(low_prices) or len(high_prices) != len(close_prices) or len(high_prices) != len(volumes):
+            raise ValueError("The lengths of all input arrays must be equal.")
+        if window_length < 1:
+            raise ValueError("Window length must be a positive integer.")
+        
+        multipliers = np.zeros(len(high_prices))
+        money_flow_volumes = np.zeros(len(high_prices))
+        for i in range(len(high_prices)):
+            high = high_prices[i]
+            low = low_prices[i]
+            close = close_prices[i]
+            volume = volumes[i]
+            
+            multiplier = ((close - low) - (high - close)) / (high - low + sys.float_info.epsilon)
+            money_flow_volume = volume * multiplier 
+            
+            multipliers[i] = multiplier
+            money_flow_volumes[i] = money_flow_volume
+        
+        cmf = np.zeros(len(high_prices))
+        for i in range(window_length, len(high_prices)):
+            window_slice = money_flow_volumes[i - window_length + 1: i + 1]
+            volume_window_slice = volumes[i - window_length + 1: i + 1]
+            cmf[i] = np.sum(window_slice) / (np.sum(volume_window_slice) +sys.float_info.epsilon)
+    
+        return cmf
+    
+    def rate_of_change(self, close_prices, window_length=14):
+        roc = np.zeros(len(close_prices))
+        for i in range(window_length, len(close_prices)):
+            roc[i] = ((close_prices[i] - close_prices[i - window_length]) / close_prices[i - window_length]) * 100
+        return roc
 
+    def percentage_price_oscillator(self, close_prices):
+        ema_12 = self.exponential_moving_average(close_prices, 12)
+        ema_26 = self.exponential_moving_average(close_prices, 26)
+        ppo = ((ema_12 - ema_26) / ema_26) * 100
+        signal_line = self.exponential_moving_average(ppo, 9)
+        return ppo, signal_line
+
+
+    def williams_r(self, high_prices, low_prices, close_prices, window_length=14):
+        highest_high = np.zeros(len(high_prices))
+        lowest_low = np.zeros(len(low_prices))
+        for i in range(window_length, len(high_prices)):
+            highest_high[i] = np.max(high_prices[i-window_length:i])
+            lowest_low[i] = np.min(low_prices[i-window_length:i])
+        wr = ((highest_high - close_prices) / (highest_high - lowest_low + 2.22e-12)) * -100
+        return wr
+    
 class DatasetProcessing():
      def __init__(self):
           super().__init__()
 
      def norm_minmax(self, x_data, minimum=0, maximum=1, axis=None):
-        """Performs the normalization of the values in x_data"""
         if axis is None:
             axis = self.axis
 
-        samples_min = x_data.min(axis=axis, keepdims=True)
-        samples_max = x_data.max(axis=axis, keepdims=True)
-        
-        # Verificação crucial para evitar divisão por zero
-        diff = samples_max - samples_min
-        mask = diff == 0  #Identifica onde a subtração resulta em 0
-        diff[mask] = 1    #Substitui os zeros por 1, evitando divisão por zero
+        # Calcular min e max
+        samples_min = np.min(x_data, axis=axis, keepdims=True) + 2.22e-12
+        samples_max = np.max(x_data, axis=axis, keepdims=True)
 
+        # Normalizar
         x_data = (x_data - samples_min) * (maximum - minimum)
-        x_data = (x_data / diff) + minimum
+        x_data = (x_data / (samples_max - samples_min) ) + minimum
 
         return x_data
      
+     def apply_NomrMinmax(self, features, min_norm, max_norm, axis=0):
+        if axis is None:
+            axis = self.axis
+
+        norm_features=np.zeros_like(features)
+        for idx in range(len(features)):
+            norm_features[idx]= self.norm_minmax(features[idx], minimum= min_norm, maximum= max_norm, axis=axis)
+        return norm_features
+
+
      def split_data(self, X : np.array , date_time : np.datetime64, factor=0.70):
           """Split the data in train validation or test
 
@@ -571,10 +413,42 @@ class DatasetProcessing():
                return loss
           
           return loss
+     def augment_data(self, features, y_output, target_class_counts):  
+            Y_categorical=np.argmax(y_output, axis=1)
+
+            augmented_features = []
+            augmented_output = []
+
+            augmented_features.append(features)
+            augmented_output.append(y_output)
+
+            for label, new_count in  target_class_counts.items():
+                idxs= Y_categorical == label
+
+                each_features =features[idxs]
+                each_labels=y_output[idxs]
+
+                target_count =len(each_labels)
+                if target_count < new_count:
+                    augmented_class_data, augmented_class_labels = resample(
+                        each_features, each_labels,
+                        replace=True,  # Permitir repetição
+                        n_samples=new_count - target_count,  # Adicionar exemplos
+                        random_state=42
+                    )
+
+                    augmented_features.append(augmented_class_data)
+                    augmented_output.append(augmented_class_labels)
+
+            augmented_features = np.vstack(augmented_features)
+            augmented_output = np.vstack(augmented_output)
+            
+            return augmented_features, augmented_output
+    
 
 class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
 
-    def __init__(self, X_df = None, lookback=1, pred_days=1, buy_sell_threshold=[0.05,-0.05], axis=0, batch_size=32, shuffle=False, processing=None, selected_features= None, data_augmentation=False):
+    def __init__(self, X_df = None, lookback=1, pred_days=1, buy_sell_threshold=[0.05,-0.05], axis=0, batch_size=32, shuffle=False, processing=None, selected_features= None, data_augmentation=False, min_max_norm=[0,1]):
         """
         Args:
             Features dataset_generator: The dataset generator providing input and output data.
@@ -585,7 +459,7 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
         if  isinstance(X_df, pd.DataFrame): 
             X_data = X_df
         else :
-            X_df = pd.DataFrame(data=np.zeros([20,6]),columns=['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume'])
+            X_df = pd.DataFrame(data=np.ones([20,6]),columns=['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume'])
             X_data = X_df
 
         self.X_df = X_df
@@ -598,11 +472,12 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
         self.axis = axis
         self.selected_features = selected_features
         self.data_augmentation = data_augmentation
-        
+        self.min_norm=min_max_norm[0]
+        self.max_norm=min_max_norm[1]
 
         #self.y_classification = self.comput_outputs(self.features[:,lookback-1])
         #self.y_classification = self.comput_outputs(self.InputData['Close'], days_lookback = self.pred_days)
-        self.y_classification = self.label_data(self.InputData['Close'].values, window = self.pred_days, positive_threshold=buy_sell_threshold[0], negative_threshold=buy_sell_threshold[1])[self.lookback:]
+        self.y_classification = self.label_data(close_prices=self.InputData['Close'].values, window=self.pred_days, positive_threshold=buy_sell_threshold[0], negative_threshold=buy_sell_threshold[1])[self.lookback:]
         print('self.pred_days', self.pred_days)
         self.features = self.comput_features(np.squeeze(self.InputData), pred_days = self.pred_days)
 
@@ -611,8 +486,20 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
             #self.features, self.y_classification = smote.fit_resample(self.features[:], self.y_classification[:])
             
             #APPLIED RANDOM OVER SAMPLER 
-            os = RandomOverSampler()
-            self.features, self.y_classification = os.fit_resample(self.features[:], self.y_classification[:])
+            #os = RandomOverSampler()
+            #self.features, self.y_classification = os.fit_resample(self.features[:], self.y_classification[:])
+
+            Y_train_categorical=np.argmax(self.y_classification, axis=1)
+            classes, counts = np.unique(Y_train_categorical, return_counts=True)
+
+            max_class = classes[np.argmax(counts)]
+            max_count = np.max(counts)
+
+            desired_count = int(0.60 * max_count)
+
+            target_class_counts = {i: desired_count if i != max_class else max_count for i in classes}
+
+            self.features, self.y_classification = self.augment_data(self.features, self.y_classification, target_class_counts)
 
             #self.InputData, self.y_classification = smote.fit_resample(self.InputData[self.lookback:].reshape(-1,1), self.y_classification)
             #self.y_classification = self.comput_outputs(self.InputData)
@@ -668,36 +555,131 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
         return variations
 
         #return np.squeeze(diff_window[:-self.lookback])
-    def label_data(self, close_prices, window=7, positive_threshold=0.05, negative_threshold=-0.05):
+
+    def label_data_int_test(self, close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
+        # Initialize all labels as 'Hold'
+        labels = [[1, 0, 0]] * len(close_prices)  # [Hold, Buy, Sell]
+        
+        total_days = len(close_prices)
+        
+        # Iterate through the closing prices using a sliding window
+        for win_begin in range(total_days - window + 1):
+            win_end = win_begin + window
+            
+            # Get the current window of prices
+            current_window = close_prices[win_begin:win_end]
+            
+            # Find the minimum and maximum values in the current window
+            min_value = min(current_window)
+            max_value = max(current_window)
+            
+            # Label the days based on the min and max values
+            for i in range(win_begin, win_end):
+                if close_prices[i] == min_value and close_prices[i] is not None:
+                    #labels[i] = [1, 0, 0]  # Hold
+                    if i + 1 < len(labels):  # Ensure we don't go out of bounds
+                        labels[i + 1] = [0, 1, 0]  # Buy on the next day
+                elif close_prices[i] == max_value and close_prices[i] is not None:
+                    #labels[i] = [1, 0, 0]  # hold
+                    if i + 1 < len(labels):  # Ensure we don't go out of bounds
+                        labels[i + 1] = [0, 0, 1]  # Sell on the next day
+                else:
+                    labels[i] = [1, 0, 0]  # Hold
+
+        return np.array(labels)
+    
+    def label_data(self,close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
+        """
+        Rotula os dados como 'BUY', 'SELL' ou 'HOLD' com base no Algorithm 1 Labelling Method.
+
+        Parâmetros:
+        - close_prices: array-like, preços de fechamento.
+        - window: int, tamanho da janela de análise.
+
+        Retorna:
+        - np.array: lista de rótulos codificados como [hold, buy, sell].
+        """
+        labels = [[1, 0, 0]] * len(close_prices)  # Inicializa todos os rótulos como 'hold'
+
+        for counter_row in range(len(close_prices)):
+            if counter_row >= window:
+                # Definir os índices da janela
+                window_begin_index = counter_row - window
+                window_end_index = counter_row
+                window_middle_index = (window_begin_index + window_end_index) // 2
+
+                # Extrair a janela de preços
+                window_prices = close_prices[window_begin_index:window_end_index + 1]
+
+                # Determinar o preço mínimo e máximo e seus índices
+                min_value = np.min(window_prices)
+                max_value = np.max(window_prices)
+
+                min_index = np.argmin(window_prices) + window_begin_index
+                max_index = np.argmax(window_prices) + window_begin_index
+
+                # Aplicar a lógica de rotulagem
+                if max_index == window_middle_index:
+                    labels[window_middle_index] = [0, 0, 1]
+                elif min_index == window_middle_index:
+                    labels[window_middle_index] = [0, 1, 0]
+
+        return np.array(labels)
+    
+    def label_data_v2(self, close_prices, window=7, positive_threshold=0.05, negative_threshold=-0.05):
         # Inicializar as variáveis
         labels = [[1, 0, 0]] * len(close_prices)  # Inicializar com "Hold"
-        self.variations = self.diff_window_samples(close_prices, window)
+        
         # Loop para processar as janelas de preços
-        for i in range(len(close_prices)):
-            win_begin = max(0, i - window + 1)
-            win_end = i + 1
-            min_value = np.min(close_prices[win_begin:win_end])
-            max_value = np.max(close_prices[win_begin:win_end])
-
-            # Verificar se o preço é o mínimo ou máximo
-            if close_prices[i] == min_value:
-                # Se o preço for o mínimo, adicionar "Hold" seguido de "Buy" no índice i+1
-                if i + 1 < len(close_prices):
-                    labels[i + 1] = [1, 0, 0]  # Hold
-                    labels[i + 1] = [0, 1, 0]  # Buy
-                else:
-                    labels[i] = [0, 1, 0]  # Buy
-            elif close_prices[i] == max_value:
-                # Se o preço for o máximo, adicionar "Hold" seguido de "Sell" no índice i+1
-                if i + 1 < len(close_prices):
-                    labels[i + 1] = [1, 0, 0]  # Hold
-                    labels[i + 1] = [0, 0, 1]  # Sell
-                else:
-                    labels[i] = [0, 0, 1]  # Sell
-
+        for i in range(window, len(close_prices)):
+            # Calcular a variação do preço
+            variation = (close_prices[i] - close_prices[i - window]) / close_prices[i - window]
+            
+            # Verificar se a variação está dentro dos limites
+            if variation > positive_threshold:
+                # Se a variação for positiva, adicionar "Buy" no índice i
+                labels[i] = [0, 1, 0]  # Buy
+            elif variation < negative_threshold:
+                # Se a variação for negativa, adicionar "Sell" no índice i
+                labels[i] = [0, 0, 1]  # Sell
+        
         # Retornar as labels
         return np.array(labels)
     
+    def label_data_v1(self,close_prices, window=7, positive_threshold=0.05, negative_threshold=-0.05):
+        """
+        Gera rótulos Buy, Sell e Hold para os preços de fechamento com base em uma janela e limiares.
+
+        Parâmetros:
+        - close_prices: array-like, preços de fechamento.
+        - window: int, tamanho da janela para cálculo de máximos e mínimos.
+        - positive_threshold: float, variação positiva mínima para sinal de Buy.
+        - negative_threshold: float, variação negativa mínima para sinal de Sell.
+
+        Retorno:
+        - np.array: rótulos no formato [Hold, Buy, Sell].
+        """
+        labels = [[1, 0, 0]] * len(close_prices)  # Inicializar com "Hold" como padrão
+
+        for i in range(len(close_prices)):
+            if i + window < len(close_prices):  # Garantir que a janela não extrapole os dados
+                future_window = close_prices[i:i + window]
+                current_price = close_prices[i]
+
+                # Calcular a variação percentual
+                future_max = np.max(future_window)
+                future_min = np.min(future_window)
+
+                max_variation = (future_max - current_price) / current_price
+                min_variation = (future_min - current_price) / current_price
+
+                # Aplicar lógica de Buy/Sell
+                if max_variation >= positive_threshold:
+                    labels[i] = [0, 1, 0]  # Buy
+                elif min_variation <= negative_threshold:
+                    labels[i] = [0, 0, 1]  # Sell
+
+        return np.array(labels)
     def label_data_v0(self, close_prices, window=7, positive_threshold=0.05, negative_threshold=-0.05):
         labels = []  # Store labels
         variations = []
@@ -748,7 +730,13 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
         for i, j in enumerate(batch_indices):
             
             #apply norm minmax for each bacth data 
-            features[i,:,:] = self.norm_minmax(self.features[j],axis=0,minimum=-1,maximum=1)
+            features[i,:,:] = np.nan_to_num(self.norm_minmax(self.features[j], axis=0, minimum=self.min_norm, maximum=self.max_norm))
+
+            if np.isinf(features[i,:,:]).any():
+                raise ValueError(f"Valor infinito encontrado na feature {j}. idx: {j}, Valor: {self.features[j]}")
+
+            if np.isnan(features[i,:,:]).any():
+                raise ValueError(f"Valor NaN encontrado na feature {j}. idx: {j}, Valor: {self.features[j]}")
             #features[i,:,:] = self.features[j]
             y[i,:] = self.y_classification[j]
 
@@ -793,12 +781,13 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
         prediction_horizon = None
         all_features = {
             'Data_lookback': self.windowing(x_data['Close'].values.astype(np.float32), lookback = self.lookback, pred_days = 0),
+            'Close': self.windowing(x_data['Close'].values.astype(np.float32), lookback = self.lookback, pred_days = 0),
             'Open': self.windowing(x_data['Open'].values.astype(np.float32), lookback = self.lookback, pred_days = 0),
             'High': self.windowing(x_data['Volume'].values.astype(np.float32), lookback = self.lookback, pred_days = 0),
             'Low': self.windowing(x_data['Low'].values.astype(np.float32), lookback = self.lookback, pred_days = 0),
             #'Adj Close': self.windowing(x_data['Adj Close'].values.astype(np.float32),lookback = self.lookback, pred_days = pred_days*2),
             'Volume': self.windowing(x_data['Volume'].values.astype(np.float32), lookback = self.lookback, pred_days = 0),
-            
+            'Volume_log': np.log(self.windowing(x_data['Volume'].values.astype(np.float32), lookback = self.lookback, pred_days = 0)),
             #'Open': x_data['Open'].values[self.lookback:prediction_horizon],
             #'High': x_data['High'].values[self.lookback:prediction_horizon],
             #'Low': x_data['Low'].values[self.lookback:prediction_horizon],
@@ -823,6 +812,12 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
             'Bollinger_Bands_Middle': self.windowing(self.bollinger_bands(x_data['Close'].values.astype(np.float32))[1][:],lookback = self.lookback, pred_days = 0),
             'Bollinger_Bands_Lower': self.windowing(self.bollinger_bands(x_data['Close'].values.astype(np.float32))[2][:],lookback = self.lookback, pred_days = 0),
             'variations': self.windowing(self.get_variations(x_data['Close'].values.astype(np.float32), days_lookback = 0),lookback = self.lookback, pred_days = 0),
+            'Chaikin_Money_Flow': self.windowing(self.chaikin_money_flow(x_data['High'].values.astype(np.float32), x_data['Low'].values.astype(np.float32), x_data['Close'].values.astype(np.float32), x_data['Volume'].values.astype(np.float32))[:],lookback = self.lookback, pred_days = 0),
+            'Williams_R': self.windowing(self.williams_r(x_data['High'].values.astype(np.float32), x_data['Low'].values.astype(np.float32), x_data['Close'].values.astype(np.float32))[:],lookback = self.lookback, pred_days = 0),
+            'ROC': self.windowing(self.rate_of_change(x_data['Close'].values.astype(np.float32))[:],lookback = self.lookback, pred_days = 0),
+            'PPO': self.windowing(self.percentage_price_oscillator(x_data['Close'].values.astype(np.float32))[:],lookback = self.lookback, pred_days = 0)
+
+
         }
    
                            
@@ -856,8 +851,12 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
                 features = np.concatenate(( Data_lookback[np.newaxis,:,:], features_2d), axis=0)
                 features=features.transpose(1,2,0)
         else:
-            features = np.hstack([all_features[feature][:, np.newaxis] for feature in selected_features])
+            #features = np.hstack([all_features[feature][:, np.newaxis] for feature in selected_features])
+            #features_1d = np.array([feature for feature in [feature for feature in selected_features] if all_features[feature].ndim != 2])
+            features_2d = np.array([feature for feature in [all_features[feature] for feature in selected_features] if feature.ndim == 2])
+            features=features_2d.transpose(1,2,0)
 
+        
         self.features_name = selected_features
 
         if self.processing is not None:
@@ -865,3 +864,111 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
 
         self.features_length= features.shape[2]
         return features[:]
+
+class scrapingHistoricalData:
+    def __init__(self):
+        pass
+    def get_crypto_historical_data(self, cryptos, interval='1d', start_time='2017-01-01', end_time=None):
+        """
+        Obtem dados históricos da Binance API
+        
+        Parameters:
+        cryptos (list): Lista de símbolos de criptomoedas (ex.: 'BTC', 'ETH', etc.)
+        interval (str): Intervalo de tempo (ex.: '1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M')
+        start_time (str): Data de início para buscar dados (formato 'YYYY-MM-DD')
+        
+        Returns:
+        DataFrame: Dados históricos das criptomoedas
+        
+        """
+        # Adiciona o par USD para cada cripto
+        cryptos = [crypto + "USDT" for crypto in cryptos]
+        
+        # Função para baixar dados históricos da Binance API
+
+        
+        # Baixar e consolidar dados em um DataFrame
+        cryptos_df = pd.DataFrame()
+        for crypto in cryptos:
+            data = self.get_binance_data(crypto, interval, start_time, end_time)
+            # Ajusta o nome da coluna removendo "USDT" antes de adicionar ao DF
+            #data.columns = [crypto.replace('USDT', '')]
+            if cryptos_df.empty:
+                cryptos_df = data
+            else:
+                cryptos_df = pd.concat([cryptos_df, data], axis=1)
+        
+        if not cryptos_df.empty:
+            cryptos_df = cryptos_df.rename(columns={
+                'open': 'Open',
+                'high': 'High',
+                'low': 'Low',
+                'close': 'Close',
+                'volume': 'Volume',
+            })
+            # Visualização dos dados
+            cryptos_df = cryptos_df.rename_axis('Date')
+            cryptos_df.reset_index(inplace= True)
+        return cryptos_df
+    
+    def get_binance_data(self, symbol, interval, start_time, end_time=None):
+        base_url = "https://api.binance.com/api/v3/klines"
+
+        if end_time == None:
+            end_time = int(pd.Timestamp.now().timestamp() * 1000)  # Data atual
+        
+        else:
+            end_time = int(pd.Timestamp(end_time).timestamp() * 1000)
+
+        # Converte a data de início para timestamp
+        start_timestamp = int(pd.Timestamp(start_time).timestamp() * 1000)
+        
+        # Lista para armazenar os dados
+        data_list = []
+        
+        # Faça requisições iterativas até obter todos os dados
+        while start_timestamp < end_time:
+            params = {
+                'symbol': symbol,
+                'interval': interval,
+                'startTime': start_timestamp,
+                'endTime': start_timestamp + (1000 * 60 * 60 * 24 * 183),  # Intervalo de 6 meses
+                'limit': 1000  # Máximo de registros por chamada
+            }
+            
+            # Coleta dados da API
+            response = requests.get(base_url, params=params)
+            data = response.json()
+            
+            # Verifica se a resposta da API está vazia
+            if data:
+                # Converte os dados em DataFrame
+                df = pd.DataFrame(data, columns=[
+                    'timestamp', 'open', 'high', 'low', 'close', 'volume',
+                    'close_time', 'quote_asset_volume', 'number_of_trades',
+                    'taker_buy_base', 'taker_buy_quote', 'ignore'
+                ])
+                
+                # Adiciona os dados à lista
+                data_list.append(df)
+            
+            # Atualiza o start_timestamp para a próxima requisição
+            start_timestamp += (1000 * 60 * 60 * 24 * 183)  # Adiciona 6 meses ao timestamp
+        
+        # Concatena todos os DataFrames
+        if data_list:
+            df = pd.concat(data_list, ignore_index=True)
+            
+            # Formata e filtra os dados necessários
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+            df.set_index('timestamp', inplace=True)
+            df['close'] = df['close'].astype(float)
+            df['low'] = df['low'].astype(float)
+            df['high'] = df['high'].astype(float)
+            df['open'] = df['open'].astype(float)
+            df['volume'] = df['volume'].astype(float)
+            
+            return df
+        else:
+            print("Não há dados disponíveis.")
+            return pd.DataFrame()
