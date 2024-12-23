@@ -588,7 +588,42 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
 
         return np.array(labels)
     
-    def label_data(self,close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
+    def label_data(self, close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
+        """
+        Data is labeled as per the logic in research paper
+        params:
+            close_prices => numpy array or list of close_prices to determine strategy
+            window_size => the size of the moving window for labeling
+        returns:
+            numpy array with integer labels (1, 0, 2) for each window center
+        """
+        total_rows = len(close_prices)
+        labels = [[1, 0, 0]] * len(close_prices)  # Inicializa todos os rótulos como 'hold'
+
+        print("Calculating labels")
+
+        for row_counter in range(window - 1, total_rows):
+            window_begin = row_counter - (window - 1)
+            window_end = row_counter
+            window_middle = (window_begin + window_end) // 2  # Índice inteiro para o centro da janela
+
+            window_values = close_prices[window_begin:window_end + 1]  # Extrai os valores da janela
+
+            # Encontra o índice do valor mínimo e máximo dentro da janela
+            min_index = np.argmin(window_values)
+            max_index = np.argmax(window_values)
+
+            # Define a etiqueta com base na posição do valor mínimo ou máximo
+            if max_index == window_middle - window_begin:
+                labels[window_middle] = [0,0,1]  # SELL
+            elif min_index == window_middle - window_begin:
+                labels[window_middle] = [0,1,0]  # BUY
+            else:
+                labels[window_middle] = [1,0,0]  # HOLD
+
+        return np.array(labels)
+    
+    def label_data_master(self,close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
         """
         Rotula os dados como 'BUY', 'SELL' ou 'HOLD' com base no Algorithm 1 Labelling Method.
 
