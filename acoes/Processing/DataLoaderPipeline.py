@@ -52,7 +52,7 @@ class ComputIndicators():
         for i in range(window_length, len(data)):
             ema[i] = alpha * data[i] + (1 - alpha) * ema[i-1]
         return ema
-
+    
     def macd(self, data, fast_period=12, slow_period=26, signal_period=9):
         if any(period < 1 for period in [fast_period, slow_period, signal_period]):
             raise ValueError("Window lengths must be positive integers.")
@@ -63,6 +63,18 @@ class ComputIndicators():
         macd_histogram = macd - macd_signal
         return macd, macd_signal, macd_histogram
 
+    def SCP(self, close_prices, window_length=12):
+        #stationary_closing_price
+        if len(close_prices) < window_length:
+            raise ValueError("The length of close prices must be greater than the window length.")
+        scp = np.zeros(len(close_prices))
+        for i in range(len(close_prices)):
+            if i < window_length:
+                scp[i] = 0
+            else:
+                scp[i] = np.tanh(close_prices[i] - close_prices[i-1])
+        return scp
+    
     def rsi(self, data, period=14, pred_days = 1):
         if period < 1:
             raise ValueError("Period must be a positive integer.")
@@ -81,7 +93,7 @@ class ComputIndicators():
         rs = np.where(avg_loss == 0, np.inf, rs)
         rsi = 100 - (100 / (1 + rs))
         return rsi
-
+      
     def cci(self, high_prices, low_prices, close_prices, window_length=20):
         typical_prices = (high_prices + low_prices + close_prices) / 3
         sma_typical_prices = self.moving_average(typical_prices, window_length)
@@ -185,22 +197,47 @@ class ComputIndicators():
         return ad_line
 
     def money_flow_index(self, high_prices, low_prices, close_prices, volumes, window_length=14):
-        if window_length < 1:
-            raise ValueError("Window length must be a positive integer.")
-        money_flow = np.zeros(len(high_prices))
-        for i in range(len(high_prices)):
-            money_flow[i] = ((high_prices[i] + low_prices[i] + close_prices[i]) / 3) * volumes[i]
-        positive_flow = np.zeros(len(high_prices))
-        negative_flow = np.zeros(len(high_prices))
-        for i in range(len(high_prices)):
-            if i < window_length - 1:
-                positive_flow[i] = np.sum(money_flow[:i+1][money_flow[:i+1] > 0])
-                negative_flow[i] = np.sum(money_flow[:i+1][money_flow[:i+1] < 0])
+        """
+        Calculate the Money Flow Index (MFI).
+        
+        Parameters:
+            high_prices (array-like): Array of high prices.
+            low_prices (array-like): Array of low prices.
+            close_prices (array-like): Array of close prices.
+            volumes (array-like): Array of volumes.
+            window_length (int): Number of periods for calculation (default: 14).
+        
+        Returns:
+            np.ndarray: MFI values with NaN for periods without enough data.
+        """
+        if len(high_prices) != len(low_prices) or len(high_prices) != len(close_prices) or len(high_prices) != len(volumes):
+            raise ValueError("All input arrays must have the same length.")
+        if len(high_prices) < window_length:
+            raise ValueError("Input data must have at least 'window_length' elements.")
+        # Calculate Typical Price (TP)
+        typical_price = (high_prices + low_prices + close_prices) / 3
+
+        # Calculate Money Flow (MF)
+        money_flow = typical_price * volumes
+
+        # Determine Positive and Negative Money Flows
+        positive_flow = np.where(typical_price[1:] > typical_price[:-1], money_flow[1:], 0)
+        negative_flow = np.where(typical_price[1:] < typical_price[:-1], money_flow[1:], 0)
+
+        # Initialize MFI array
+        mfi = np.full(len(typical_price), self._lambda)
+
+        # Calculate MFI using rolling sums
+        for i in range(window_length - 1, len(typical_price)):
+            positive_sum = np.sum(positive_flow[i - window_length + 1:i])
+            negative_sum = np.sum(negative_flow[i - window_length + 1:i])
+            
+            if negative_sum == 0:
+                mfi[i] = 100
             else:
-                window_slice = money_flow[i - window_length + 1: i + 1]
-                positive_flow[i] = np.sum(window_slice[window_slice > 0])
-                negative_flow[i] = np.sum(window_slice[window_slice < 0])
-        mfi = 100 - (100 / (1 + positive_flow / np.abs(negative_flow)))
+                money_flow_ratio = positive_sum / (negative_sum)
+                mfi[i] = 100 - (100 / (1 + money_flow_ratio))
+
         return mfi
 
     def ichimoku_cloud(self, high_prices, low_prices, window_length1=9, window_length2=26, window_length3=52):
@@ -324,12 +361,15 @@ class ComputIndicators():
 
 
     def williams_r(self, high_prices, low_prices, close_prices, window_length=14):
-        highest_high = np.zeros(len(high_prices))
-        lowest_low = np.zeros(len(low_prices))
+        if len(high_prices) != len(low_prices) or len(high_prices) != len(close_prices):
+            raise ValueError("The lengths of high prices, low prices and close prices must be equal.")
+        if len(high_prices) < window_length:
+            raise ValueError("The length of prices must be greater than the window length.")
+        wr = np.zeros(len(high_prices))
         for i in range(window_length, len(high_prices)):
-            highest_high[i] = np.max(high_prices[i-window_length:i])
-            lowest_low[i] = np.min(low_prices[i-window_length:i])
-        wr = ((highest_high - close_prices) / (highest_high - lowest_low + 2.22e-12)) * -100
+            highest_high = np.max(high_prices[i-window_length:i])
+            lowest_low = np.min(low_prices[i-window_length:i])
+            wr[i] = ((highest_high - close_prices[i]) / (highest_high - lowest_low + self._lambda)) * -100
         return wr
     
 class DatasetProcessing():
@@ -573,7 +613,55 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
 
         #return np.squeeze(diff_window[:-self.lookback])
 
-    def label_data_int_test(self, close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
+    def label_data__(self, close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
+        # Initialize all labels as 'Hold'
+        """
+        ref: Stock Trading Classifier with Multichannel Convolutional Neural Network
+        
+        Data is labeled as per the logic in research paper
+        params:
+            close_prices => numpy array or list of close_prices to determine strategy
+            window_size => the size of the moving window for labeling
+        returns:
+            numpy array with integer labels (1, 0, 2) for each window center
+        """
+
+        total_rows = len(close_prices)
+        labels = [[1, 0, 0]] * total_rows  # [Hold, Buy, Sell]
+
+        # Iterate through the closing prices using a sliding window
+        for row in np.arange(0 , total_rows , 1):
+
+            window_begin = row
+
+            window_end = min(window_begin + window, total_rows)
+            
+            # Get the current window of prices
+            prices_window = close_prices[window_begin:window_end]
+        
+            # Find the minimum and maximum values in the current window
+            min_value = np.min(prices_window)
+            max_value = np.max(prices_window)
+            
+            for i, price in enumerate(prices_window):
+                idx = window_begin + i
+                if  idx + 1 < total_rows:
+
+                    if  price == min_value and price is not None:
+                        labels[idx] = [1, 0, 0]  # Hold signal
+                        labels[idx +1] = [0, 1, 0]  # Buy signal
+
+                    elif price == max_value and price is not None:
+                        labels[idx] = [1, 0, 0]  # Hold signal
+                        labels[idx +1] = [0, 0, 1]  # Sell signal
+                    
+                    #else:
+                    #    labels[idx] = [1, 0, 0]  # Hold signal
+
+        return np.array(labels)
+    
+
+    def label_data_master(self, close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
         # Initialize all labels as 'Hold'
         labels = [[1, 0, 0]] * len(close_prices)  # [Hold, Buy, Sell]
         
@@ -593,20 +681,18 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
             # Label the days based on the min and max values
             for i in range(win_begin, win_end):
                 if close_prices[i] == min_value and close_prices[i] is not None:
-                    #labels[i] = [1, 0, 0]  # Hold
                     if i + 1 < len(labels):  # Ensure we don't go out of bounds
-                        labels[i + 1] = [0, 1, 0]  # Buy on the next day
+                        labels[i+1] = [0, 1, 0]  # Buy on the next day
                 elif close_prices[i] == max_value and close_prices[i] is not None:
-                    #labels[i] = [1, 0, 0]  # hold
                     if i + 1 < len(labels):  # Ensure we don't go out of bounds
-                        labels[i + 1] = [0, 0, 1]  # Sell on the next day
-                else:
-                    labels[i] = [1, 0, 0]  # Hold
+                        labels[i+1] = [0, 0, 1]  # Sell on the next day
 
         return np.array(labels)
     
     def label_data(self, close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
         """
+        ref: Algorithmic Financial Trading with Deep Convolutional Neural Networks: Time Series to Image Conversion Approach
+        
         Data is labeled as per the logic in research paper
         params:
             close_prices => numpy array or list of close_prices to determine strategy
@@ -615,32 +701,35 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
             numpy array with integer labels (1, 0, 2) for each window center
         """
         total_rows = len(close_prices)
-        labels = [[1, 0, 0]] * len(close_prices)  # Inicializa todos os rótulos como 'hold'
-
+        labels = [[1, 0, 0]] * total_rows  # init all signals as Hold
+        print(len(labels))
         print("Calculating labels")
 
-        for row_counter in range(window - 1, total_rows):
-            window_begin = row_counter - (window - 1)
-            window_end = row_counter
-            window_middle = (window_begin + window_end) // 2  # Índice inteiro para o centro da janela
+        for row in np.arange( 0 , total_rows , 1):
+            window_begin = row
 
-            window_values = close_prices[window_begin:window_end + 1]  # Extrai os valores da janela
+            window_end = min(window_begin + window, total_rows)
+            
+            window_middle = (window_begin + window_end) // 2
+            
+            window_values= close_prices[window_begin:window_end]
 
-            # Encontra o índice do valor mínimo e máximo dentro da janela
-            min_index = np.argmin(window_values)
-            max_index = np.argmax(window_values)
+            # find the index based in the max and min value in the window
+            min_index = np.argmin(window_values) + window_begin
+            max_index = np.argmax(window_values) + window_begin
 
-            # Define a etiqueta com base na posição do valor mínimo ou máximo
-            if max_index == window_middle - window_begin:
+            # define the label based in the min and max index
+            
+            if max_index  == window_middle:
                 labels[window_middle] = [0,0,1]  # SELL
-            elif min_index == window_middle - window_begin:
+            elif min_index == window_middle:
                 labels[window_middle] = [0,1,0]  # BUY
-            else:
+            else:    
                 labels[window_middle] = [1,0,0]  # HOLD
 
         return np.array(labels)
     
-    def label_data_master(self,close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
+    def label_data_v3(self,close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
         """
         Rotula os dados como 'BUY', 'SELL' ou 'HOLD' com base no Algorithm 1 Labelling Method.
 
@@ -795,7 +884,7 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
         
         if self.datatype == '2D':
             # Transformar para formato 2D
-            features = np.transpose(features, [0, 2, 1]).reshape(-1, 5, 5, 16)
+            features = np.transpose(features, [0, 2, 1]).reshape(-1, 1, self.features_length, self.lookback)
 
         # Convertendo features e y para tensores do TensorFlow
         features = tf.convert_to_tensor(features, dtype=tf.float32)
@@ -870,14 +959,14 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
             'Bollinger_Bands_Lower': self.windowing(self.bollinger_bands(x_data['Close'].values.astype(np.float32))[2][:],lookback = self.lookback, pred_days = 0),
             'variations': self.windowing(self.get_variations(x_data['Close'].values.astype(np.float32), days_lookback = 0),lookback = self.lookback, pred_days = 0),
             'Chaikin_Money_Flow': self.windowing(self.chaikin_money_flow(x_data['High'].values.astype(np.float32), x_data['Low'].values.astype(np.float32), x_data['Close'].values.astype(np.float32), x_data['Volume'].values.astype(np.float32))[:],lookback = self.lookback, pred_days = 0),
-            'Williams_R': self.windowing(self.williams_r(x_data['High'].values.astype(np.float32), x_data['Low'].values.astype(np.float32), x_data['Close'].values.astype(np.float32))[:],lookback = self.lookback, pred_days = 0),
+            'Williams_R': self.windowing(self.williams_r(x_data['High'].values.astype(np.float32), x_data['Low'].values.astype(np.float32), x_data['Close'].values.astype(np.float32), self.lookback)[:],lookback = self.lookback, pred_days = 0),
             'ROC': self.windowing(self.rate_of_change(x_data['Close'].values.astype(np.float32))[:],lookback = self.lookback, pred_days = 0),
-            'PPO': self.windowing(self.percentage_price_oscillator(x_data['Close'].values.astype(np.float32))[:],lookback = self.lookback, pred_days = 0)
-
+            'PPO': self.windowing(self.percentage_price_oscillator(x_data['Close'].values.astype(np.float32))[:],lookback = self.lookback, pred_days = 0),
+            'SCP': self.windowing(self.SCP (x_data['Close'].values.astype(np.float32))[:],lookback = self.lookback, pred_days = 0),
+            'MFI': self.windowing(self.money_flow_index(x_data['High'].values.astype(np.float32), x_data['Low'].values.astype(np.float32), x_data['Close'].values.astype(np.float32), x_data['Volume'].values.astype(np.float32))[:],lookback = self.lookback, pred_days = 0)
 
         }
-   
-                           
+                               
         if self.selected_features is None:
             selected_features = [key for key in all_features.keys()]
             
