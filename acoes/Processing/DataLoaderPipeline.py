@@ -438,7 +438,61 @@ class DatasetProcessing():
           T_test = date_time[nit_test:]
           
           return X_train,X_test, T_train, T_test
+     
+     def focal_loss(self,gamma=2.0, alpha=0.25):
+        def loss(y_true, y_pred):
+            y_pred = K.clip(y_pred, K.epsilon(), 1 - K.epsilon())
+            cross_entropy = -y_true * K.log(y_pred)
+            focal_loss = alpha * K.pow(1 - y_pred, gamma) * cross_entropy
+            return K.sum(focal_loss, axis=-1)
+        return loss
+     
+     def custom_weighted_categorical_crossentropy(self, weights, penalty_matrix):
+        """
+        Custom weighted categorical crossentropy with penalty for false positives.
+        
+        Args:
+            weights: numpy array of shape (C,) where C is the number of classes.
+            penalty_matrix: numpy array of shape (C, C) where penalty_matrix[i][j] is the penalty
+                        for classifying class i as class j.
+        
+        Returns:
+            A loss function.
+        """
 
+        weights = tf.Variable(weights, dtype=tf.float32)
+        penalty_matrix = tf.Variable(penalty_matrix, dtype=tf.float32)
+        
+        def loss(y_true, y_pred):
+            # Clip predictions to prevent NaN's and Inf's
+            y_pred = K.clip(y_pred, K.epsilon(), 1 - K.epsilon())
+            
+            # Calculate the base loss
+            base_loss = y_true * K.log(y_pred) * weights
+            base_loss = -K.sum(base_loss, -1)
+            
+            # Calculate the penalty for false positives
+            y_true_class = K.argmax(y_true, axis=-1)  # True classes
+            y_pred_class = K.argmax(y_pred, axis=-1)  # Predicted classes
+            
+            # Create a mask for false positives
+            false_positive_mask = tf.not_equal(y_true_class, y_pred_class)
+            
+            # Get the penalty for each sample
+            sample_penalties = tf.gather_nd(
+                penalty_matrix,
+                tf.stack([y_true_class, y_pred_class], axis=-1)
+            )
+            
+            # Apply the penalties only to false positives
+            penalty_loss = tf.where(false_positive_mask, sample_penalties, 0.0)
+            
+            # Combine the base loss and penalty loss
+            total_loss = base_loss + penalty_loss
+            return total_loss
+        
+        return loss
+     
      def weighted_categorical_crossentropy(self,weights):
           """
           from https://gist.github.com/wassname/ce364fddfc8a025bfab4348cf5de852d
@@ -460,7 +514,7 @@ class DatasetProcessing():
                #y_true_printed = tf.print("y_true =", y_true)
                #y_pred_printed = tf.print("y_pred =", y_pred)
                
-               y_pred /= K.sum(y_pred, axis=-1, keepdims=True)
+               #y_pred /= K.sum(y_pred, axis=-1, keepdims=True)
                # clip to prevent NaN's and Inf's
                y_pred = K.clip(y_pred, K.epsilon(), 1 - K.epsilon())
                # calc
@@ -469,7 +523,36 @@ class DatasetProcessing():
                return loss
           
           return loss
-     def augment_data(self, features, y_output, target_class_counts):  
+     
+     def augment_data(self,features, y_output, target_class_counts, shuffle=False):  
+        
+        stock_idx = np.arange(len(y_output)) 
+        idx_buy = [i for i, vetor in enumerate(y_output.tolist()) if vetor == [0, 1, 0]]
+        idx_sell = [i for i, vetor in enumerate(y_output.tolist()) if vetor == [0, 0, 1]]
+        idx_hold = [i for i, vetor in enumerate(y_output.tolist()) if vetor == [1, 0, 0]]
+
+
+        def resample(old_idx, new_len):
+            idx_resampled=[]
+            idx=0
+            while len(idx_resampled) < new_len:
+                idx_resampled.append(old_idx[idx])
+                idx +=1
+                if idx >= len(old_idx):
+                    idx=0
+            return idx_resampled
+
+        new_buy_idx=resample(idx_buy, target_class_counts[1]-len(idx_buy))
+        new_sell_idx=resample(idx_sell, target_class_counts[2]-len(idx_sell))
+        #new_hold_idx=resample(idx_hold, target_class_counts[0])
+        stock_idx = stock_idx.tolist() + new_buy_idx + new_sell_idx 
+
+        if shuffle:
+            np.random.shuffle(stock_idx)
+
+        return features[stock_idx], y_output[stock_idx]
+
+     def augment_data_2(self, features, y_output, target_class_counts):  
             Y_categorical=np.argmax(y_output, axis=1)
 
             augmented_features = []
@@ -552,11 +635,11 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
             max_class = classes[np.argmax(counts)]
             max_count = np.max(counts)
 
-            desired_count = int(0.60 * max_count)
+            desired_count = int(0.60 * max_count) #int(0.60 * max_count)
 
             target_class_counts = {i: desired_count if i != max_class else max_count for i in classes}
 
-            self.features, self.y_classification = self.augment_data(self.features, self.y_classification, target_class_counts)
+            self.features, self.y_classification = self.augment_data(self.features, self.y_classification, [max_count, int(max_count*0.6), int(max_count*0.6)])
 
             #self.InputData, self.y_classification = smote.fit_resample(self.InputData[self.lookback:].reshape(-1,1), self.y_classification)
             #self.y_classification = self.comput_outputs(self.InputData)
@@ -573,10 +656,12 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
         self.shuffle = shuffle
 
         #self.indices=np.arange(self.__len__() + self.batchSize)
-        if self.batchSize>1:
-            self.indices=np.arange(self.__len__() + self.batchSize)
-        else:
-            self.indices=np.arange(self.__len__())
+        #if self.batchSize>1:
+        #    self.indices=np.arange(self.__len__() + self.batchSize)
+        #else:
+        #    self.indices=np.arange(self.__len__())
+
+        self.indices=np.arange(self.inputShape[0])
 
         if self.shuffle == True:
             np.random.shuffle(self.indices)
@@ -613,7 +698,7 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
 
         #return np.squeeze(diff_window[:-self.lookback])
 
-    def label_data__(self, close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
+    def label_data_master__(self, close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
         # Initialize all labels as 'Hold'
         """
         ref: Stock Trading Classifier with Multichannel Convolutional Neural Network
@@ -627,7 +712,8 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
         """
 
         total_rows = len(close_prices)
-        labels = [[1, 0, 0]] * total_rows  # [Hold, Buy, Sell]
+        #labels = [[1, 0, 0]] * total_rows  # [Hold, Buy, Sell]
+        labels = [[1, 0, 0] for _ in range(total_rows)]  # Correção: listas independentes
 
         # Iterate through the closing prices using a sliding window
         for row in np.arange(0 , total_rows , 1):
@@ -648,48 +734,96 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
                 if  idx + 1 < total_rows:
 
                     if  price == min_value and price is not None:
-                        labels[idx] = [1, 0, 0]  # Hold signal
-                        labels[idx +1] = [0, 1, 0]  # Buy signal
+                        #labels[idx] = [1, 0, 0]  # Hold signal
+                        labels[idx] = [0, 1, 0]  # Buy signal
 
                     elif price == max_value and price is not None:
-                        labels[idx] = [1, 0, 0]  # Hold signal
-                        labels[idx +1] = [0, 0, 1]  # Sell signal
+                        #labels[idx] = [1, 0, 0]  # Hold signal
+                        labels[idx] = [0, 0, 1]  # Sell signal
                     
-                    #else:
-                    #    labels[idx] = [1, 0, 0]  # Hold signal
-
-        return np.array(labels)
-    
-
-    def label_data_master(self, close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
-        # Initialize all labels as 'Hold'
-        labels = [[1, 0, 0]] * len(close_prices)  # [Hold, Buy, Sell]
-        
-        total_days = len(close_prices)
-        
-        # Iterate through the closing prices using a sliding window
-        for win_begin in range(total_days - window + 1):
-            win_end = win_begin + window
-            
-            # Get the current window of prices
-            current_window = close_prices[win_begin:win_end]
-            
-            # Find the minimum and maximum values in the current window
-            min_value = min(current_window)
-            max_value = max(current_window)
-            
-            # Label the days based on the min and max values
-            for i in range(win_begin, win_end):
-                if close_prices[i] == min_value and close_prices[i] is not None:
-                    if i + 1 < len(labels):  # Ensure we don't go out of bounds
-                        labels[i+1] = [0, 1, 0]  # Buy on the next day
-                elif close_prices[i] == max_value and close_prices[i] is not None:
-                    if i + 1 < len(labels):  # Ensure we don't go out of bounds
-                        labels[i+1] = [0, 0, 1]  # Sell on the next day
+                    else:
+                        labels[idx] = [1, 0, 0]  # Hold signal
 
         return np.array(labels)
     
     def label_data(self, close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
+        
+        total_days = len(close_prices)
+        labels = [[1, 0, 0] for _ in range(len(close_prices))]  # Correção: listas independentes
+        winBegin = 0
+        winEnd = winBegin + window
+        countRow = 0
+
+        while countRow <= total_days:
+             # Get the current window of prices
+            current_window = close_prices[winBegin:winEnd]
+
+            minValue = min(current_window)
+            maxValue = max(current_window)
+
+            for i in range(winBegin, winEnd):
+                if close_prices[i] == minValue and close_prices[i] is not None:
+                    labels[i-1] = [1,0,0]
+                    labels[i] = [0,1,0]
+                elif close_prices[i] == maxValue and close_prices[i] is not None:
+                    labels[i-1] = [1,0,0]
+                    labels[i] = [0,0,1]
+                elif close_prices[i] is not None:
+                    labels[i] = [1,0,0]
+
+            winBegin = winEnd + 1
+            winEnd = winBegin + window
+            countRow = winEnd
+
+        return np.array(labels)
+
+    def label_data_master(self, close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
+        """
+        ref: Algorithmic Financial Trading with Deep Convolutional Neural Networks: Time Series to Image Conversion Approach
+        
+        Data is labeled as per the logic in research paper
+        params:
+            close_prices => numpy array or list of close_prices to determine strategy
+            window_size => the size of the moving window for labeling
+        returns:
+            numpy array with integer labels (1, 0, 2) for each window center
+        """
+        total_rows = len(close_prices)
+        #labels = [[1, 0, 0]] * total_rows  # init all signals as Hold
+        labels = [[1, 0, 0] for _ in range(total_rows)]  # Correção: listas independentes
+
+        print(len(labels))
+        print("Calculating labels")
+        countRow = 0
+        while countRow <= total_rows:
+            countRow += 1 
+            if countRow > window:
+                window_begin = countRow - window
+                window_end = window_begin + window
+                window_middle_index = (window_begin + window_end) // 2
+                
+                if window_end > total_rows:
+                    pass
+
+                else:
+                    window_values= close_prices[window_begin:window_end]
+
+                    # find the index based in the max and min value in the window
+                    min_index = np.argmin(window_values) + window_begin
+                    max_index = np.argmax(window_values) + window_begin
+
+                    # define the label based in the min and max index
+                    
+                    if max_index  == window_middle_index:
+                        labels[window_middle_index] = [0,0,1]  # SELL
+                    elif min_index == window_middle_index:
+                        labels[window_middle_index] = [0,1,0]  # BUY
+                    else:    
+                        labels[window_middle_index] = [1,0,0]  # HOLD
+
+        return np.array(labels)
+    
+    def label_data__(self, close_prices, window=11, positive_threshold=0.05, negative_threshold=-0.05):
         """
         ref: Algorithmic Financial Trading with Deep Convolutional Neural Networks: Time Series to Image Conversion Approach
         
@@ -708,24 +842,29 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
         for row in np.arange( 0 , total_rows , 1):
             window_begin = row
 
-            window_end = min(window_begin + window, total_rows)
-            
-            window_middle = (window_begin + window_end) // 2
-            
-            window_values= close_prices[window_begin:window_end]
+            #window_end = min(window_begin + window, total_rows)
+            window_end = window_begin + window
 
-            # find the index based in the max and min value in the window
-            min_index = np.argmin(window_values) + window_begin
-            max_index = np.argmax(window_values) + window_begin
+            if window_end > total_rows:
+                pass
 
-            # define the label based in the min and max index
-            
-            if max_index  == window_middle:
-                labels[window_middle] = [0,0,1]  # SELL
-            elif min_index == window_middle:
-                labels[window_middle] = [0,1,0]  # BUY
-            else:    
-                labels[window_middle] = [1,0,0]  # HOLD
+            else:
+                window_middle = (window_begin + window_end) // 2
+                
+                window_values= close_prices[window_begin:window_end]
+
+                # find the index based in the max and min value in the window
+                min_index = np.argmin(window_values) + window_begin
+                max_index = np.argmax(window_values) + window_begin
+
+                # define the label based in the min and max index
+                
+                if max_index  == window_middle:
+                    labels[window_middle] = [0,0,1]  # SELL
+                elif min_index == window_middle:
+                    labels[window_middle] = [0,1,0]  # BUY
+                else:    
+                    labels[window_middle] = [1,0,0]  # HOLD
 
         return np.array(labels)
     
@@ -860,8 +999,17 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
 
         if idx == -1:
             idx = self.__len__()
+        
+        batch_idx=idx*self.batchSize + (idx-1)
+        end = batch_idx + self.batchSize
+
+        if end > len(self.indices):
+            end = len(self.indices)
+            batch_indices = self.indices[batch_idx:end]
+        else:
+            batch_indices = self.indices[batch_idx:end]
             
-        batch_indices = self.indices[idx : idx + self.batchSize]
+
         #window=len(self.selected_features)+self.lookback-1
         
         y = np.zeros([self.batchSize,self.output_shape[0]])
