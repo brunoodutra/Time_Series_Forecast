@@ -116,45 +116,6 @@ class Norm:
 
         return x_data, y_data
     
-# class normalize:
-#     """ Class used to normalize a numpy 2D matrix
-#     """
-    
-#     def __init__(self,axis=1) -> None:
-#         """Class constructor to initialize the object
-#         """
-#         self.name = 'normalize'
-#         self.axis = axis
-
-#     def getName(self):
-#         """Retrieve the name of the preprocessing
-
-#         Returns:
-#             str: The string with the name
-#         """
-#         return self.name
-
-#     def __call__(self, x_data, y_data=None):
-#         """Performs the normalization of the values in x_data
-
-#         Args:
-#             x_data (ndarray): 2D matrix
-#             y_data (any): y_data. Defaults to None.
-
-#         Returns:
-#             tuple[ndarray, any]: tuple with the normalized matrix in the first index
-#         """
-            
-#         # Compute minimum and maximum for each channel within each window
-#         min_val = np.min(x_data, axis=self.axis, keepdims=True)
-#         max_val = np.max(x_data, axis=self.axis, keepdims=True)
-
-#         # Subtract minimum and divide by range for each channel within each window
-#         # x_data = (x_data - min_val[:, np.newaxis, :]) / (max_val - min_val)[:, np.newaxis, :]
-#         x_data = (x_data - min_val) / (max_val - min_val)
-    
-#         return x_data, y_data
-
 class StandardScaler:
     """ Class used to StandardScaler a numpy 2D matrix based in mean and std
     # Subtract mean and divide by standard deviation for each channel within each window
@@ -671,104 +632,6 @@ class HighPassFilter:
         return x_data, y_data
 
 
-class BandStopFilter:
-    """ Class used to filter data
-    """
-    
-    def __init__(self, lowcut, highcut, fs, order):
-        """Class constructor to initialize the object
-        
-        """
-        self.freq = freq
-#         self.fs = fs
-#         self.order = order
-        
-        # self.normal_cutoff = freq / (fs / 2)
-        
-        # Get the filter coefficients 
-        self.b, self.a = signal.iirfilter(order, [lowcut, highcut], fs=fs, btype='bandstop')
-               
-        self.name = 'BandStopFilter'
-        
-    def getName(self):
-        """Retrieve the name of the preprocessing
-        Returns:
-            str: The string with the name
-        """
-        return self.name  + str(self.freq)
-    
-    def butter_bandstop_filtfilt(self, data):
-
-        y = signal.filtfilt(self.b, self.a, data)
-
-        return y
-
-    def __call__(self, x_data, y_data):
-        """Performs the one hot encode of the values in y_data
-        Args:
-            x_data (ndarray): n-D matrix. Default to None
-            y_data (any): y_data. 
-            labels (array): all labels present in dataset
-        Returns:
-            tuple[ndarray, any]: tuple with the encoded label
-        """
-        
-        x_data = self.butter_bandstop_filtfilt(x_data)
-                        
-        return x_data, y_data
-
-class MuLawQuantization:
-    """ Class used to add noise channel data
-    """
-    
-    def __init__(self, axis, mu):
-        """Class constructor to initialize the object
-        
-        """
-
-        self.name = 'MuLawQuantization'
-        self.axis = axis
-        self.mu = mu
-        
-    def getName(self):
-        """Retrieve the name of the preprocessing
-        Returns:
-            str: The string with the name
-        """
-        return self.name 
-    
-    def normalization(self, x_data):
-        
-        samples_min = x_data.min(axis=self.axis,keepdims=True)
-        samples_max = x_data.max(axis=self.axis,keepdims=True)
-        x_data = (x_data - samples_min) * (2)
-        x_data = (x_data / (samples_max - samples_min) ) - 1
-        
-        return x_data
-
-    def muLaw(self, x_data):
-        
-        num = np.sign(x_data) * np.log(1+self.mu*np.abs(x_data))
-        den = np.log(1+self.mu)                         
-        
-        return num/den
-    
-    def __call__(self, x_data, y_data):
-        """Performs the one hot encode of the values in y_data
-        Args:
-            x_data (ndarray): n-D matrix. Default to None
-            y_data (any): y_data. 
-            labels (array): all labels present in dataset
-        Returns:
-            tuple[ndarray, any]: tuple with the encoded label
-        """
-        
-        # x_data = self.normalization(x_data)
-        x_data = self.muLaw(x_data)
-
-        
-        return x_data, y_data    
-
 
 class CreatePatches(tf.keras.layers.Layer):
     
@@ -797,34 +660,6 @@ class CreatePatches(tf.keras.layers.Layer):
         patch_dims = patches.shape[-1]
         patches = tf.reshape(patches, [batch_size, -1, patch_dims])
         return patches, y_data
-
-
-class GetSequences():
-    
-    def __init__(self):
-        self.namefunc = 'GetSequences'
-        
-        self.emtke = EMGTKE()
-        self.lowpass = LowPassFilter(freq=3, fs=2048, order=1)
-    
-    def getName(self):
-        """Retrieve the name of the preprocessing
-        Returns:
-            str: The string with the name
-        """
-        return self.namefunc 
-    
-    def __call__(self, x_data, y_data):
-    
-
-        filtered = x_data.copy()
-
-        filtered = np.abs(x_data)
-        filtered = self.emtke(filtered)
-        filtered = filtered / np.max(filtered,axis=1)            
-        filtered = self.lowpass(filtered)
-
-        return self.process_emg_data(emg, filtered), y_data
 
         
         
