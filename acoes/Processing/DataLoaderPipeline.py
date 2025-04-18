@@ -1,382 +1,23 @@
-from tqdm import tqdm
-import time
 from keras.utils import Sequence
-from keras import backend as K
-from imblearn.over_sampling import SMOTE
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 from sklearn.utils import resample
-import requests
-from imblearn.over_sampling import RandomOverSampler 
+
+from CustomTrainLosses import CustomTrainLosses
+from MarketIndicators import ComputIndicators
+from MarketDataCollector import scrapingHistoricalData
 
 import sys
-
-class ComputIndicators():
-    
-    def __init__(self):
-        self._lambda = 22e-12
-
-    def autorregressive_coefs(self, data, p=3):
-        channels = data.shape[0]
-        phi = np.zeros([data.shape[0], p])
-        ar_coefs = np.zeros([channels, p])
-        y_init = []
-        y = data
-        aux = np.zeros(p)
-        for k in range(p): 
-            aux[p-k:] = y[k]
-            y_init.append(aux.copy())
-        phi = np.vstack([y[i-p:i] if i-p>=0 else y_init[i]  for i in range(0, len(y))])
-        ar_coefs[:] = np.linalg.inv(phi.T.dot(phi)).dot(phi.T.dot(data))
-        return ar_coefs
-
-    def moving_average(self, data, window_length):
-        if window_length < 1:
-            raise ValueError("Window length must be a positive integer.")
-        moving_average_values = np.zeros(len(data))
-        for i in range(len(data)):
-            if i < window_length - 1:
-                moving_average_values[i] = np.mean(data[:i+1])
-            else:
-                window_slice = data[i - window_length + 1 : i + 1]
-                moving_average_values[i] = np.mean(window_slice)
-        return moving_average_values
-
-    def exponential_moving_average(self, data, window_length):
-        if window_length < 1:
-            raise ValueError("Window length must be a positive integer.")
-        ema = np.zeros(len(data))
-        ema[:window_length] = np.mean(data[:window_length])
-        alpha = 2 / (1 + window_length)  
-        for i in range(window_length, len(data)):
-            ema[i] = alpha * data[i] + (1 - alpha) * ema[i-1]
-        return ema
-    
-    def macd(self, data, fast_period=12, slow_period=26, signal_period=9):
-        if any(period < 1 for period in [fast_period, slow_period, signal_period]):
-            raise ValueError("Window lengths must be positive integers.")
-        ema_fast = self.exponential_moving_average(data, fast_period)
-        ema_slow = self.exponential_moving_average(data, slow_period)
-        macd = ema_fast - ema_slow
-        macd_signal = self.exponential_moving_average(macd, signal_period)
-        macd_histogram = macd - macd_signal
-        return macd, macd_signal, macd_histogram
-
-    def SCP(self, close_prices, window_length=12):
-        #stationary_closing_price
-        if len(close_prices) < window_length:
-            raise ValueError("The length of close prices must be greater than the window length.")
-        scp = np.zeros(len(close_prices))
-        for i in range(len(close_prices)):
-            if i < window_length:
-                scp[i] = 0
-            else:
-                scp[i] = np.tanh(close_prices[i] - close_prices[i-1])
-        return scp
-    
-    def rsi(self, data, period=14, pred_days = 1):
-        if period < 1:
-            raise ValueError("Period must be a positive integer.")
-        delta = np.diff(data)
-        up_changes = np.where(delta > 0, delta, 0)
-        down_changes = np.where(delta < 0, np.abs(delta), 0)
-        avg_gain = np.zeros(len(data))
-        avg_loss = np.zeros(len(data))
-        avg_gain[:period] = np.cumsum(up_changes[:period]) / np.arange(1, period + 1)
-        avg_loss[:period] = np.cumsum(down_changes[:period]) / np.arange(1, period + 1)
-        for i in range(period, len(up_changes)):
-            avg_gain[i + 1] = (avg_gain[i] * (period - 1) + up_changes[i]) / period
-            avg_loss[i + 1] = (avg_loss[i] * (period - 1) + down_changes[i]) / period
-        epsilon = 1e-8
-        rs = avg_gain / (avg_loss + epsilon)
-        rs = np.where(avg_loss == 0, np.inf, rs)
-        rsi = 100 - (100 / (1 + rs))
-        return rsi
-      
-    def cci(self, high_prices, low_prices, close_prices, window_length=20):
-        typical_prices = (high_prices + low_prices + close_prices) / 3
-        sma_typical_prices = self.moving_average(typical_prices, window_length)
-        mean_deviation = np.mean(np.abs(typical_prices - sma_typical_prices))
-        cci_values = (typical_prices - sma_typical_prices) / (0.015 * mean_deviation + self._lambda)
-        return cci_values
-
-    def stochastic(self, high_prices, low_prices, close_prices, window_length=14, smooth_k=3, smooth_d=3):
-        if window_length < 1 or smooth_k < 1 or smooth_d < 1:
-            raise ValueError("Window lengths must be positive integers.")
-        lowest_low = self.minimum(low_prices, window_length)
-        highest_high = self.maximum(high_prices, window_length)
-        percent_k = 100 * ((close_prices - lowest_low) / (highest_high - lowest_low))
-        percent_d = self.moving_average(percent_k, window_length=smooth_k)
-        return percent_k, percent_d
-
-    def bollinger_bands(self, data, window_length=20, num_std=2):
-        if window_length < 1:
-            raise ValueError("Window length must be a positive integer.")
-        moving_average = self.moving_average(data, window_length)
-        std_deviation = np.zeros(len(data))
-        for i in range(len(data)):
-            if i < window_length - 1:
-                std_deviation[i] = np.std(data[:i+1])
-            else:
-                std_deviation[i] = np.std(data[i - window_length + 1: i + 1])
-        upper_band = moving_average + num_std * std_deviation
-        lower_band = moving_average - num_std * std_deviation
-        return moving_average, upper_band, lower_band
-
-    def minimum(self, data, window_length):
-        if window_length < 1:
-            raise ValueError("Window length must be a positive integer.")
-        minimum_values = np.zeros(len(data))
-        for i in range(len(data)):
-            if i < window_length - 1:
-                minimum_values[i] = np.min(data[:i+1])
-            else:
-                window_slice = data[i - window_length + 1: i + 1]
-                minimum_values[i] = np.min(window_slice)
-        return minimum_values
-
-    def maximum(self, data, window_length):
-        if window_length < 1:
-            raise ValueError("Window length must be a positive integer.")
-        maximum_values = np.zeros(len(data))
-        for i in range(len(data)):
-            if i < window_length - 1:
-                maximum_values[i] = np.max(data[:i+1])
-            else:
-                window_slice = data[i - window_length + 1: i + 1]
-                maximum_values[i] = np.max(window_slice)
-        return maximum_values
-
-    def momentum(self, data, window_length=10):
-        if window_length < 1:
-            raise ValueError("Window length must be a positive integer.")
-        momentum_values = np.zeros(len(data))
-        for i in range(len(data)):
-            if i < window_length - 1:
-                momentum_values[i] = data[i]
-            else:
-                momentum_values[i] = data[i] - data[i - window_length]
-        return momentum_values
-
-    def roc(self, data, window_length=10):
-        if window_length < 1:
-            raise ValueError("Window length must be a positive integer.")
-        roc_values = np.zeros(len(data))
-        for i in range(len(data)):
-            if i < window_length - 1:
-                roc_values[i] = 0
-            else:
-                roc_values[i] = (data[i] - data[i - window_length]) / data[i - window_length] * 100
-        return roc_values
-
-    def on_balance_volume(self, close_prices, volumes):
-        if len(close_prices) != len(volumes):
-            raise ValueError("The lengths of close prices and volumes must be equal.")
-        obv = np.zeros(len(close_prices))
-        obv[0] = volumes[0]
-        for i in range(1, len(close_prices)):
-            if close_prices[i] > close_prices[i - 1]:
-                obv[i] = obv[i - 1] + volumes[i]
-            elif close_prices[i] < close_prices[i - 1]:
-                obv[i] = obv[i - 1] - volumes[i]
-            else:
-                obv[i] = obv[i - 1]
-        return obv
-
-    def accumulation_distribution_line(self, high_prices, low_prices, close_prices, volumes):
-        if len(high_prices) != len(low_prices) or len(high_prices) != len(close_prices) or len(high_prices) != len(volumes):
-            raise ValueError("The lengths of all input arrays must be equal.")
-        money_flow = np.zeros(len(high_prices))
-        for i in range(len(high_prices)):
-            money_flow[i] = ((high_prices[i] + low_prices[i] + close_prices[i]) / 3) * volumes[i]
-        ad_line = np.zeros(len(high_prices))
-        ad_line[0] = money_flow[0]
-        for i in range(1, len(high_prices)):
-            ad_line[i] = ad_line[i - 1] + money_flow[i]
-        return ad_line
-
-    def money_flow_index(self, high_prices, low_prices, close_prices, volumes, window_length=14):
-        """
-        Calculate the Money Flow Index (MFI).
-        
-        Parameters:
-            high_prices (array-like): Array of high prices.
-            low_prices (array-like): Array of low prices.
-            close_prices (array-like): Array of close prices.
-            volumes (array-like): Array of volumes.
-            window_length (int): Number of periods for calculation (default: 14).
-        
-        Returns:
-            np.ndarray: MFI values with NaN for periods without enough data.
-        """
-        if len(high_prices) != len(low_prices) or len(high_prices) != len(close_prices) or len(high_prices) != len(volumes):
-            raise ValueError("All input arrays must have the same length.")
-        if len(high_prices) < window_length:
-            raise ValueError("Input data must have at least 'window_length' elements.")
-        # Calculate Typical Price (TP)
-        typical_price = (high_prices + low_prices + close_prices) / 3
-
-        # Calculate Money Flow (MF)
-        money_flow = typical_price * volumes
-
-        # Determine Positive and Negative Money Flows
-        positive_flow = np.where(typical_price[1:] > typical_price[:-1], money_flow[1:], 0)
-        negative_flow = np.where(typical_price[1:] < typical_price[:-1], money_flow[1:], 0)
-
-        # Initialize MFI array
-        mfi = np.full(len(typical_price), self._lambda)
-
-        # Calculate MFI using rolling sums
-        for i in range(window_length - 1, len(typical_price)):
-            positive_sum = np.sum(positive_flow[i - window_length + 1:i])
-            negative_sum = np.sum(negative_flow[i - window_length + 1:i])
-            
-            if negative_sum == 0:
-                mfi[i] = 100
-            else:
-                money_flow_ratio = positive_sum / (negative_sum)
-                mfi[i] = 100 - (100 / (1 + money_flow_ratio))
-
-        return mfi
-
-    def ichimoku_cloud(self, high_prices, low_prices, window_length1=9, window_length2=26, window_length3=52):
-        if window_length1 < 1 or window_length2 < 1 or window_length3 < 1:
-            raise ValueError("Window lengths must be positive integers.")
-        Tenkan_sen = (self.maximum(high_prices, window_length1) + self.minimum(low_prices, window_length1)) / 2
-        Kijun_sen = (self.maximum(high_prices, window_length2) + self.minimum(low_prices, window_length2)) / 2
-        Senkou_span_a = (Tenkan_sen + Kijun_sen) / 2
-        Senkou_span_b = (self.maximum(high_prices, window_length3) + self.minimum(low_prices, window_length3)) / 2
-        return Tenkan_sen, Kijun_sen, Senkou_span_a, Senkou_span_b
-
-    def parabolic_sar(self, high_prices, low_prices, acceleration=0.02, maximum=0.2):
-        if acceleration < 0 or maximum < 0:
-            raise ValueError("Acceleration and maximum must be non-negative.")
-        sar = np.zeros(len(high_prices))
-        sar[0] = low_prices[0]
-        direction = 1
-        for i in range(1, len(high_prices)):
-            if direction == 1:
-                sar[i] = sar[i - 1] + acceleration * (high_prices[i - 1] - sar[i - 1])
-                if low_prices[i] < sar[i]:
-                    direction = -1
-                    sar[i] = low_prices[i]
-            else:
-                sar[i] = sar[i - 1] - acceleration * (low_prices[i - 1] - sar[i - 1])
-                if high_prices[i] > sar[i]:
-                    direction = 1
-                    sar[i] = high_prices[i]
-            if acceleration > maximum:
-                acceleration = maximum
-        return sar
-
-    def average_directional_index(self, high_prices, low_prices, close_prices, window_length=14):
-        if window_length < 1:
-            raise ValueError("Window length must be a positive integer.")
-        plus_di = np.zeros(len(high_prices))
-        minus_di = np.zeros(len(high_prices))
-        for i in range(1, len(high_prices)):
-            plus_dm = high_prices[i] - high_prices[i - 1]
-            minus_dm = low_prices[i - 1] - low_prices[i]
-            if plus_dm > minus_dm and plus_dm > 0:
-                plus_di[i] = plus_dm
-            if minus_dm > plus_dm and minus_dm > 0:
-                minus_di[i] = minus_dm
-        plus_di = self.moving_average(plus_di, window_length)
-        minus_di = self.moving_average(minus_di, window_length)
-        adx = 100 * (np.abs(plus_di - minus_di) / (plus_di + minus_di))
-        return adx
-
-    def fibonacci_retracements(self, high_price, low_price):
-        if high_price < low_price:
-            raise ValueError("High price must be greater than or equal to low price.")
-        levels = [low_price, low_price + (high_price - low_price) * 0.236, low_price + (high_price - low_price) * 0.382, 
-                  low_price + (high_price - low_price) * 0.5, low_price + (high_price - low_price) * 0.618, low_price + (high_price - low_price) * 0.764, high_price]
-        return levels
-
-    def candlestick_patterns(self, open_prices, high_prices, low_prices, close_prices):
-        if len(open_prices) != len(high_prices) or len(open_prices) != len(low_prices) or len(open_prices) != len(close_prices):
-            raise ValueError("The lengths of all input arrays must be equal.")
-        patterns = []
-        for i in range(len(open_prices)):
-            if close_prices[i] > open_prices[i] and high_prices[i] > close_prices[i] and low_prices[i] < open_prices[i]:
-                patterns.append(" Hammer")
-            elif close_prices[i] < open_prices[i] and high_prices[i] > open_prices[i] and low_prices[i] < close_prices[i]:
-                patterns.append("Shooting Star")
-            # Add more patterns as needed
-        return patterns
-
-    def elliott_wave_theory(self, high_prices, low_prices):
-        if len(high_prices) != len(low_prices):
-            raise ValueError("The lengths of high prices and low prices must be equal.")
-        waves = []
-        for i in range(len(high_prices)):
-            if high_prices[i] > high_prices[i - 1] and low_prices[i] > low_prices[i - 1]:
-                waves.append("Impulse Wave")
-            elif high_prices[i] < high_prices[i - 1] and low_prices[i] < low_prices[i - 1]:
-                waves.append("Corrective Wave")
-            # Add more wave patterns as needed
-        return waves
-    
-    def chaikin_money_flow(self, high_prices, low_prices, close_prices, volumes, window_length=21):
-        if len(high_prices) != len(low_prices) or len(high_prices) != len(close_prices) or len(high_prices) != len(volumes):
-            raise ValueError("The lengths of all input arrays must be equal.")
-        if window_length < 1:
-            raise ValueError("Window length must be a positive integer.")
-        
-        multipliers = np.zeros(len(high_prices))
-        money_flow_volumes = np.zeros(len(high_prices))
-        for i in range(len(high_prices)):
-            high = high_prices[i]
-            low = low_prices[i]
-            close = close_prices[i]
-            volume = volumes[i]
-            
-            multiplier = ((close - low) - (high - close)) / (high - low + sys.float_info.epsilon)
-            money_flow_volume = volume * multiplier 
-            
-            multipliers[i] = multiplier
-            money_flow_volumes[i] = money_flow_volume
-        
-        cmf = np.zeros(len(high_prices))
-        for i in range(window_length, len(high_prices)):
-            window_slice = money_flow_volumes[i - window_length + 1: i + 1]
-            volume_window_slice = volumes[i - window_length + 1: i + 1]
-            cmf[i] = np.sum(window_slice) / (np.sum(volume_window_slice) +sys.float_info.epsilon)
-    
-        return cmf
-    
-    def rate_of_change(self, close_prices, window_length=14):
-        roc = np.zeros(len(close_prices))
-        for i in range(window_length, len(close_prices)):
-            roc[i] = ((close_prices[i] - close_prices[i - window_length]) / close_prices[i - window_length]) * 100
-        return roc
-
-    def percentage_price_oscillator(self, close_prices):
-        ema_12 = self.exponential_moving_average(close_prices, 12)
-        ema_26 = self.exponential_moving_average(close_prices, 26)
-        ppo = ((ema_12 - ema_26) / ema_26) * 100
-        signal_line = self.exponential_moving_average(ppo, 9)
-        return ppo, signal_line
-
-
-    def williams_r(self, high_prices, low_prices, close_prices, window_length=14):
-        if len(high_prices) != len(low_prices) or len(high_prices) != len(close_prices):
-            raise ValueError("The lengths of high prices, low prices and close prices must be equal.")
-        if len(high_prices) < window_length:
-            raise ValueError("The length of prices must be greater than the window length.")
-        wr = np.zeros(len(high_prices))
-        for i in range(window_length, len(high_prices)):
-            highest_high = np.max(high_prices[i-window_length:i])
-            lowest_low = np.min(low_prices[i-window_length:i])
-            wr[i] = ((highest_high - close_prices[i]) / (highest_high - lowest_low + self._lambda)) * -100
-        return wr
-    
 class DatasetProcessing():
      def __init__(self):
           #super().__init__()
           self._lambda = 22e-12
-            
+    
+     def denormalize(self, normalized_values, target_min, target_max):
+        """Reverte a normalização para obter valores na escala original"""
+        return normalized_values * (target_max - target_min) + target_min
+
      def norm_minmax(self, x_data, minimum=-1, maximum=1, axis=None):
         if axis is None:
             axis = self.axis
@@ -405,6 +46,10 @@ class DatasetProcessing():
 
         return x_data
      
+     def normalize_regression(self, data, target_min, target_max):
+        """Normaliza qualquer dado usando os parâmetros do treino"""
+        return (data - target_min) / (target_max - target_min + 1e-8)  # +1e-8 evita 
+
      def apply_NomrMinmax(self, features, min_norm, max_norm, axis=0):
         if axis is None:
             axis = self.axis
@@ -438,91 +83,7 @@ class DatasetProcessing():
           T_test = date_time[nit_test:]
           
           return X_train,X_test, T_train, T_test
-     
-     def focal_loss(self,gamma=2.0, alpha=0.25):
-        def loss(y_true, y_pred):
-            y_pred = K.clip(y_pred, K.epsilon(), 1 - K.epsilon())
-            cross_entropy = -y_true * K.log(y_pred)
-            focal_loss = alpha * K.pow(1 - y_pred, gamma) * cross_entropy
-            return K.sum(focal_loss, axis=-1)
-        return loss
-     
-     def custom_weighted_categorical_crossentropy(self, weights, penalty_matrix):
-        """
-        Custom weighted categorical crossentropy with penalty for false positives.
-        
-        Args:
-            weights: numpy array of shape (C,) where C is the number of classes.
-            penalty_matrix: numpy array of shape (C, C) where penalty_matrix[i][j] is the penalty
-                        for classifying class i as class j.
-        
-        Returns:
-            A loss function.
-        """
 
-        weights = tf.Variable(weights, dtype=tf.float32)
-        penalty_matrix = tf.Variable(penalty_matrix, dtype=tf.float32)
-        
-        def loss(y_true, y_pred):
-            # Clip predictions to prevent NaN's and Inf's
-            y_pred = K.clip(y_pred, K.epsilon(), 1 - K.epsilon())
-            
-            # Calculate the base loss
-            base_loss = y_true * K.log(y_pred) * weights
-            base_loss = -K.sum(base_loss, -1)
-            
-            # Calculate the penalty for false positives
-            y_true_class = K.argmax(y_true, axis=-1)  # True classes
-            y_pred_class = K.argmax(y_pred, axis=-1)  # Predicted classes
-            
-            # Create a mask for false positives
-            false_positive_mask = tf.not_equal(y_true_class, y_pred_class)
-            
-            # Get the penalty for each sample
-            sample_penalties = tf.gather_nd(
-                penalty_matrix,
-                tf.stack([y_true_class, y_pred_class], axis=-1)
-            )
-            
-            # Apply the penalties only to false positives
-            penalty_loss = tf.where(false_positive_mask, sample_penalties, 0.0)
-            
-            # Combine the base loss and penalty loss
-            total_loss = base_loss + penalty_loss
-            return total_loss
-        
-        return loss
-     
-     def weighted_categorical_crossentropy(self,weights):
-          """
-          from https://gist.github.com/wassname/ce364fddfc8a025bfab4348cf5de852d
-          A weighted version of keras.objectives.categorical_crossentropy
-          
-          Variables:
-               weights: numpy array of shape (C,) where C is the number of classes
-          
-          Usage:
-               weights = np.array([0.5,2,10]) # Class one at 0.5, class 2 twice the normal weights, class 3 10x.
-               loss = weighted_categorical_crossentropy(weights)
-               model.compile(loss=loss,optimizer='adam')
-          """
-          
-          #weights = K.variable(weights)
-          weights = tf.Variable(weights, dtype=tf.float32)    
-          def loss(y_true, y_pred):
-               # scale predictions so that the class probas of each sample sum to 1
-               #y_true_printed = tf.print("y_true =", y_true)
-               #y_pred_printed = tf.print("y_pred =", y_pred)
-               
-               #y_pred /= K.sum(y_pred, axis=-1, keepdims=True)
-               # clip to prevent NaN's and Inf's
-               y_pred = K.clip(y_pred, K.epsilon(), 1 - K.epsilon())
-               # calc
-               loss = y_true * K.log(y_pred) * weights
-               loss = -K.sum(loss, -1)
-               return loss
-          
-          return loss
      
      def augment_data(self,features, y_output, target_class_counts, shuffle=False):  
         
@@ -550,7 +111,7 @@ class DatasetProcessing():
         if shuffle:
             np.random.shuffle(stock_idx)
 
-        return features[stock_idx], y_output[stock_idx]
+        return features[stock_idx], y_output[stock_idx], stock_idx
 
      def augment_data_2(self, features, y_output, target_class_counts):  
             Y_categorical=np.argmax(y_output, axis=1)
@@ -585,9 +146,10 @@ class DatasetProcessing():
             return augmented_features, augmented_output
     
 
-class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
+class FeaturesDataGenerator(ComputIndicators, DatasetProcessing, CustomTrainLosses, Sequence):
 
-    def __init__(self, X_df = None, datatype='1D', lookback=1, pred_days=1, buy_sell_threshold=[0.05,-0.05], axis=0, batch_size=32, shuffle=False, processing=None, selected_features= None, data_augmentation=False, min_max_norm=[0,1]):
+    def __init__(self, X_df = None, datatype='1D', predict_type='classification', lookback=1, pred_days=1, buy_sell_threshold=[0.05,-0.05], axis=0, batch_size=32, shuffle=False, processing=None, selected_features= None, data_augmentation=False, 
+                 min_max_norm_features=[0,1], min_max_regression_targets=None):
         """
         Args:
             Features dataset_generator: The dataset generator providing input and output data.
@@ -611,41 +173,53 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
         self.axis = axis
         self.selected_features = selected_features
         self.data_augmentation = data_augmentation
-        self.min_norm=min_max_norm[0]
-        self.max_norm=min_max_norm[1]
+        self.min_norm=min_max_norm_features[0]
+        self.max_norm=min_max_norm_features[1]
+        self.min_max_regression_targets=min_max_regression_targets
         self.datatype = datatype
         self._lambda = 22e-12
+        self.predict_type = predict_type
         #self.y_classification = self.comput_outputs(self.features[:,lookback-1])
         #self.y_classification = self.comput_outputs(self.InputData['Close'], days_lookback = self.pred_days)
-        self.y_classification = self.label_data(close_prices=self.InputData['Close'].values, window=self.pred_days, positive_threshold=buy_sell_threshold[0], negative_threshold=buy_sell_threshold[1])[self.lookback:]
+        self.y_classification = self.label_data(close_prices=self.InputData['Close'].values, 
+                                                window=self.pred_days, 
+                                                positive_threshold=buy_sell_threshold[0], 
+                                                negative_threshold=buy_sell_threshold[1])[self.lookback:]
         print('self.pred_days', self.pred_days)
         self.features = self.comput_features(np.squeeze(self.InputData), pred_days = self.pred_days)
-        
-        if self.data_augmentation == True:
-            #smote = SMOTE(sampling_strategy='auto', random_state=42)
-            #self.features, self.y_classification = smote.fit_resample(self.features[:], self.y_classification[:])
-            
-            #APPLIED RANDOM OVER SAMPLER 
-            #os = RandomOverSampler()
-            #self.features, self.y_classification = os.fit_resample(self.features[:], self.y_classification[:])
 
+        self.window_close_values =  self.windowing(self.InputData['Close'].values.astype(np.float32), lookback = 1, pred_days = 0)[lookback-1:]
+
+        if self.data_augmentation == True:
+            
+            #APPLIED OVER SAMPLER 
+                # over sample repeating the historical data 
             Y_train_categorical=np.argmax(self.y_classification, axis=1)
             classes, counts = np.unique(Y_train_categorical, return_counts=True)
 
             max_class = classes[np.argmax(counts)]
             max_count = np.max(counts)
-
+            
+            #using 60% of desbalance
             desired_count = int(0.60 * max_count) #int(0.60 * max_count)
 
+            # get the classes counts
             target_class_counts = {i: desired_count if i != max_class else max_count for i in classes}
 
-            self.features, self.y_classification = self.augment_data(self.features, self.y_classification, [max_count, int(max_count*0.6), int(max_count*0.6)])
+            self.features, self.y_classification, stock_idx = self.augment_data(self.features, self.y_classification, [max_count, int(max_count*0.6), int(max_count*0.6)])
 
-            #self.InputData, self.y_classification = smote.fit_resample(self.InputData[self.lookback:].reshape(-1,1), self.y_classification)
-            #self.y_classification = self.comput_outputs(self.InputData)
+            self.window_close_values=self.window_close_values[stock_idx]
         
-        #self.features = self.comput_features(np.squeeze(self.InputData))
 
+        if self.min_max_regression_targets == None:
+            self.target_min = np.min(self.window_close_values)
+            self.target_max = np.max(self.window_close_values)
+        else:
+            self.target_min = self.min_max_regression_targets[0]
+            self.target_max = self.min_max_regression_targets[1]
+
+        self.norm_targets = self.normalize_regression(self.window_close_values, self.target_min, self.target_max)
+        
         self.inputShape  = self.features.shape
         self.output_shape=self.y_classification[0].shape
 
@@ -1012,8 +586,10 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
 
         #window=len(self.selected_features)+self.lookback-1
         
-        y = np.zeros([self.batchSize,self.output_shape[0]])
-    
+        y_class = np.zeros([self.batchSize,self.output_shape[0]])
+
+        y_regression = np.zeros([self.batchSize,1])
+
         #features = np.zeros([self.batchSize, self.features_length])
         features = np.zeros([self.batchSize, self.lookback, self.features_length])   
         for i, j in enumerate(batch_indices):
@@ -1027,8 +603,11 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
             if np.isnan(features[i,:,:]).any():
                 raise ValueError(f"Valor NaN encontrado na feature {j}. idx: {j}, Valor: {self.features[j]}")
             #features[i,:,:] = self.features[j]
-            y[i,:] = self.y_classification[j]
-        
+            
+            y_regression[i,:] = self.norm_targets[j]  # Usa o valor normalizado
+    
+
+            y_class[i,:] = self.y_classification[j]
         
         if self.datatype == '2D':
             # Transformar para formato 2D
@@ -1036,9 +615,15 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
 
         # Convertendo features e y para tensores do TensorFlow
         features = tf.convert_to_tensor(features, dtype=tf.float32)
-        y = tf.convert_to_tensor(y, dtype=tf.float32)
+        y_class = tf.convert_to_tensor(y_class, dtype=tf.float32)
+        y_regression = tf.convert_to_tensor(y_regression, dtype=tf.float32)
 
-        return features, y
+        if self.predict_type =="classification":
+            return features, y_class
+        elif self.predict_type =="regrtession":
+            return features, y_regression
+        elif self.predict_type =="both":
+            return features, [y_regression,y_class]
     
     def bat_data(self,x_data):
         x_data= (x_data - np.min(x_data)) / (np.max(x_data) - np.min(x_data))
@@ -1061,7 +646,7 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
         return self.__getitem__(index)
     
     
-    def comput_features(self, x_data, pred_days = 0 ):
+    def comput_features(self, x_data, pred_days = 0):
         """
         Args:
             emg_data (numpy.ndarray): Input EMG data.
@@ -1159,110 +744,3 @@ class FeaturesDataGenerator(DatasetProcessing, ComputIndicators, Sequence):
         self.features_length= features.shape[2]
         return features[:]
 
-class scrapingHistoricalData:
-    def __init__(self):
-        pass
-    def get_crypto_historical_data(self, cryptos, interval='1d', start_time='2017-01-01', end_time=None):
-        """
-        Obtem dados históricos da Binance API
-        
-        Parameters:
-        cryptos (list): Lista de símbolos de criptomoedas (ex.: 'BTC', 'ETH', etc.)
-        interval (str): Intervalo de tempo (ex.: '1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M')
-        start_time (str): Data de início para buscar dados (formato 'YYYY-MM-DD')
-        
-        Returns:
-        DataFrame: Dados históricos das criptomoedas
-        
-        """
-        # Adiciona o par USD para cada cripto
-        cryptos = [crypto + "USDT" for crypto in cryptos]
-        
-        # Função para baixar dados históricos da Binance API
-
-        
-        # Baixar e consolidar dados em um DataFrame
-        cryptos_df = pd.DataFrame()
-        for crypto in cryptos:
-            data = self.get_binance_data(crypto, interval, start_time, end_time)
-            # Ajusta o nome da coluna removendo "USDT" antes de adicionar ao DF
-            #data.columns = [crypto.replace('USDT', '')]
-            if cryptos_df.empty:
-                cryptos_df = data
-            else:
-                cryptos_df = pd.concat([cryptos_df, data], axis=1)
-        
-        if not cryptos_df.empty:
-            cryptos_df = cryptos_df.rename(columns={
-                'open': 'Open',
-                'high': 'High',
-                'low': 'Low',
-                'close': 'Close',
-                'volume': 'Volume',
-            })
-            # Visualização dos dados
-            cryptos_df = cryptos_df.rename_axis('Date')
-            cryptos_df.reset_index(inplace= True)
-        return cryptos_df
-    
-    def get_binance_data(self, symbol, interval, start_time, end_time=None):
-        base_url = "https://api.binance.com/api/v3/klines"
-
-        if end_time == None:
-            end_time = int(pd.Timestamp.now().timestamp() * 1000)  # Data atual
-        
-        else:
-            end_time = int(pd.Timestamp(end_time).timestamp() * 1000)
-
-        # Converte a data de início para timestamp
-        start_timestamp = int(pd.Timestamp(start_time).timestamp() * 1000)
-        
-        # Lista para armazenar os dados
-        data_list = []
-        
-        # Faça requisições iterativas até obter todos os dados
-        while start_timestamp < end_time:
-            params = {
-                'symbol': symbol,
-                'interval': interval,
-                'startTime': start_timestamp,
-                'endTime': start_timestamp + (1000 * 60 * 60 * 24 * 183),  # Intervalo de 6 meses
-                'limit': 1000  # Máximo de registros por chamada
-            }
-            
-            # Coleta dados da API
-            response = requests.get(base_url, params=params)
-            data = response.json()
-            
-            # Verifica se a resposta da API está vazia
-            if data:
-                # Converte os dados em DataFrame
-                df = pd.DataFrame(data, columns=[
-                    'timestamp', 'open', 'high', 'low', 'close', 'volume',
-                    'close_time', 'quote_asset_volume', 'number_of_trades',
-                    'taker_buy_base', 'taker_buy_quote', 'ignore'
-                ])
-                
-                # Adiciona os dados à lista
-                data_list.append(df)
-            
-            # Atualiza o start_timestamp para a próxima requisição
-            start_timestamp += (1000 * 60 * 60 * 24 * 183)  # Adiciona 6 meses ao timestamp
-        
-        # Concatena todos os DataFrames
-        if data_list:
-            df = pd.concat(data_list, ignore_index=True)
-            
-            # Formata e filtra os dados necessários
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-            df.set_index('timestamp', inplace=True)
-            df['close'] = df['close'].astype(float)
-            df['low'] = df['low'].astype(float)
-            df['high'] = df['high'].astype(float)
-            df['open'] = df['open'].astype(float)
-            df['volume'] = df['volume'].astype(float)
-            
-            return df
-        else:
-            print("Não há dados disponíveis.")
-            return pd.DataFrame()
