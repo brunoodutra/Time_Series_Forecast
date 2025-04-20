@@ -1,0 +1,60 @@
+
+from fastapi import FastAPI
+from pydantic import BaseModel
+import joblib
+import os
+import pandas as pd
+app = FastAPI()
+
+# function to get the last recomendation
+def get_last_recommendation(model_name: str, crypto: str):
+    file_path = f'Recommendations/{model_name}_{crypto}_recommendation.csv'
+    if os.path.exists(file_path):
+        df = pd.read_csv(file_path)
+        last_recommendation = df.iloc[-1]
+        return {
+            'Date': last_recommendation['Date'],
+            'Time': last_recommendation['Time'],
+            'recommendation': last_recommendation['recommendation'],
+            'Price': last_recommendation['Price'],
+        }
+    else:
+        return None
+
+def get_recommendation_history(model_name: str, crypto: str):
+    file_path = f'Recommendations/{model_name}_{crypto}_recommendation.csv'
+    if os.path.exists(file_path):
+        df = pd.read_csv(file_path)
+        history = []
+        for index, row in df.iterrows():
+            history.append({
+                'Date': row['Date'],
+                'Time': row['Time'],
+                'recommendation': row['recommendation'],
+                'Price': row['Price'],
+            })
+        return history
+    else:
+        return None
+    
+# API to get the last recomendation
+@app.get("/last_recommendation")
+async def last_recommendation_api(model_name: str, crypto: str):
+    last_recommendation = get_last_recommendation(model_name, crypto)
+    if last_recommendation is not None:
+        return last_recommendation
+    else:
+        return {"error": "No recommendations found"}
+
+# API to get the history 
+@app.get("/recommendation_history")
+async def last_recommendation_api(model_name: str, crypto: str):
+    history  = get_recommendation_history(model_name, crypto)
+    if history  is not None:
+        return history 
+    else:
+        return {"error": "No recommendations found"}
+        
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
