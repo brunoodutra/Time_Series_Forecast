@@ -1,10 +1,22 @@
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from pydantic import BaseModel
 import joblib
 import os
 import pandas as pd
 app = FastAPI()
+
+
+# Configuração do CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permite todas as origens (ajuste conforme necessário)
+    allow_credentials=True,
+    allow_methods=["*"],  # Permite todos os métodos HTTP (GET, POST, OPTIONS, etc.)
+    allow_headers=["*"],  # Permite todos os cabeçalhos
+)
 
 # function to get the last recomendation
 def get_last_recommendation(model_name: str, crypto: str):
