@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoAdvisor - Sistema de Recomendações</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <style>
+        body {
+            background-color: #111827;
+            color: #e5e7eb;
+        }
+        .recommendation-buy {
+            background-color: rgba(16, 185, 129, 0.2);
+            border: 1px solid #10b981;
+            color: #10b981;
+        }
+        .recommendation-hold {
+            background-color: rgba(245, 158, 11, 0.2);
+            border: 1px solid #f59e0b;
+            color: #f59e0b;
+        }
+        .recommendation-sell {
+            background-color: rgba(239, 68, 68, 0.2);
+            border: 1px solid #ef4444;
+            color: #ef4444;
+        }
+        .card {
+            background-color: #1f2937;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #374151;
+        }
+        th {
+            background-color: #111827;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+        .apexcharts-tooltip {
+            background-color: #1f2937 !important;
+            color: #e5e7eb !important;
+            border: none !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
+        }
+        input, select {
+            background-color: #374151;
+            color: #e5e7eb;
+            border: 1px solid #4b5563;
+            border-radius: 0.375rem;
+            padding: 0.5rem 0.75rem;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+        }
+        .loader {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid #60a5fa;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="mb-8">
+            <h1 class="text-3xl font-bold text-center mb-6">CryptoAdvisor - Sistema de Recomendações</h1>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="card p-4">
+                    <h2 class="text-lg font-semibold mb-2">Configurações</h2>
+                    <div class="grid grid-cols-1 gap-4">
+                        <div>
+                            <label for="modelSelect" class="block mb-1">Modelo de Previsão</label>
+                            <select id="modelSelect" class="w-full">
+                                <option value="CNN">CNN</option>
+                                <option value="LSTM">LSTM</option>
+                                <option value="RNN">RNN</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="cryptoSelect" class="block mb-1">Criptomoeda</label>
+                            <select id="cryptoSelect" class="w-full">
+                                <option value="BTC">Bitcoin (BTC)</option>
+                                <option value="ETH">Ethereum (ETH)</option>
+                                <option value="BNB">Binance Coin (BNB)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="intervalSelect" class="block mb-1">Intervalo</label>
+                            <select id="intervalSelect" class="w-full">
+                                <option value="4h">4 horas</option>
+                                <option value="1h">1 hora</option>
+                                <option value="1d">1 dia</option>
+                            </select>
+                        </div>
+                        <button id="updateButton" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded">
+                            Atualizar Dados
+                        </button>
+                    </div>
+                </div>
+                <div class="card p-4 col-span-2" id="lastRecommendationCard">
+                    <h2 class="text-lg font-semibold mb-2">Última Recomendação</h2>
+                    <div id="loadingLastRec" class="flex justify-center items-center py-8">
+                        <div class="loader"></div>
+                    </div>
+                    <div id="lastRecommendationContent" class="hidden">
+                        <div class="flex justify-between items-center mb-2">
+                            <span id="lastRecDate" class="text-gray-400"></span>
+                            <span id="lastRecPrice" class="font-semibold"></span>
+                        </div>
+                        <div class="py-6 flex items-center justify-center">
+                            <div id="recommendationBadge" class="text-4xl font-bold py-3 px-8 rounded-lg">
+                                HOLD
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Chart Section -->
+        <section class="mb-8">
+            <div class="card p-4">
+                <h2 class="text-lg font-semibold mb-4">Gráfico de Preço e Recomendações</h2>
+                <div id="loadingChart" class="flex justify-center items-center py-16">
+                    <div class="loader"></div>
+                </div>
+                <div id="candleChart" class="w-full h-96"></div>
+            </div>
+        </section>
+
+        <!-- History Section -->
+        <section class="mb-8">
+            <div class="card p-4">
+                <h2 class="text-lg font-semibold mb-4">Histórico de Recomendações</h2>
+                <div id="loadingHistory" class="flex justify-center items-center py-8">
+                    <div class="loader"></div>
+                </div>
+                <div id="historyTableContainer" class="hidden overflow-x-auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Hora</th>
+                                <th>Recomendação</th>
+                                <th>Preço</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                            <!-- Rows will be added here via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="text-center text-gray-500 text-sm">
+            <p>© 2025 CryptoAdvisor - Todos os direitos reservados</p>
+            <p class="mt-1">Este sistema é apenas para fins educacionais. Não é aconselhamento financeiro.</p>
+        </footer>
+    </div>
+
+    <script>
+        // Global state
+        const state = {
+            model: 'CNN',
+            crypto: 'BTC',
+            interval: '4h', // Por enquanto, o intervalo não está sendo usado na sua API, mas mantive aqui para o futuro
+            lastRecommendation: null,
+            recommendationHistory: [],
+            candleData: [],
+            chart: null,
+            binanceSymbolMap: {
+                'BTC': 'BTCUSDT',
+                'ETH': 'ETHUSDT',
+                'BNB': 'BNBUSDT'
+            },
+            intervalMap: {
+                '1h': '1h',
+                '4h': '4h',
+                '1d': '1d'
+            }
+        };
+    
+        // DOM elements
+        const elements = {
+            modelSelect: document.getElementById('modelSelect'),
+            cryptoSelect: document.getElementById('cryptoSelect'),
+            intervalSelect: document.getElementById('intervalSelect'),
+            updateButton: document.getElementById('updateButton'),
+            lastRecDate: document.getElementById('lastRecDate'),
+            lastRecPrice: document.getElementById('lastRecPrice'),
+            recommendationBadge: document.getElementById('recommendationBadge'),
+            lastRecommendationContent: document.getElementById('lastRecommendationContent'),
+            historyTableBody: document.getElementById('historyTableBody'),
+            historyTableContainer: document.getElementById('historyTableContainer'),
+            loadingLastRec: document.getElementById('loadingLastRec'),
+            loadingHistory: document.getElementById('loadingHistory'),
+            loadingChart: document.getElementById('loadingChart'),
+            candleChart: document.getElementById('candleChart')
+        };
+    
+        // Initialize chart
+        function initializeChart() {
+            if (state.chart) {
+                state.chart.destroy();
+            }
+    
+            const options = {
+                series: [{
+                    name: 'Candle',
+                    data: []
+                }],
+                chart: {
+                    type: 'candlestick',
+                    height: 400,
+                    fontFamily: 'Inter, sans-serif',
+                    background: '#1f2937',
+                    foreColor: '#e5e7eb',
+                    animations: {
+                        enabled: false
+                    },
+                    toolbar: {
+                        show: true,
+                        tools: {
+                            download: false,
+                            selection: true,
+                            zoom: true,
+                            zoomin: true,
+                            zoomout: true,
+                            pan: true,
+                            reset: true
+                        }
+                    }
+                },
+                annotations: {
+                    points: []
+                },
+                xaxis: {
+                    type: 'datetime',
+                    labels: {
+                        formatter: function(value) {
+                            const date = new Date(value);
+                            return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                        }
+                    }
+                },
+                yaxis: {
+                    tooltip: {
+                        enabled: true
+                    },
+                    labels: {
+                        formatter: function(value) {
+                            return value.toFixed(2);
+                        }
+                    }
+                },
+                grid: {
+                    borderColor: '#374151'
+                },
+                plotOptions: {
+                    candlestick: {
+                        colors: {
+                            upward: '#10b981',
+                            downward: '#ef4444'
+                        },
+                        wick: {
+                            useFillColor: true
+                        }
+                    }
+                },
+                tooltip: {
+                    theme: 'dark',
+                    x: {
+                        format: 'dd MMM yyyy HH:mm'
+                    }
+                }
+            };
+    
+            state.chart = new ApexCharts(elements.candleChart, options);
+            state.chart.render();
+        }
+    
+        // Fetch last recommendation from your API
+        async function fetchLastRecommendation() {
+            elements.loadingLastRec.classList.remove('hidden');
+            elements.lastRecommendationContent.classList.add('hidden');
+    
+            try {
+                const url = `http://127.0.0.1:8000/last_recommendation?model_name=${state.model}&crypto=${state.crypto}`;
+                const response = await fetch(url);
+    
+                if (!response.ok) {
+                    throw new Error(`Erro ao buscar a última recomendação: ${response.status}`);
+                }
+    
+                state.lastRecommendation = await response.json();
+                updateLastRecommendationUI();
+            } catch (error) {
+                console.error('Erro ao buscar a última recomendação:', error);
+                // Em caso de erro na API, você pode manter uma mensagem informativa ou um modo de demonstração
+                elements.lastRecommendationContent.innerHTML = '<p class="text-red-500">Erro ao carregar a última recomendação.</p>';
+            } finally {
+                elements.loadingLastRec.classList.add('hidden');
+                elements.lastRecommendationContent.classList.remove('hidden');
+            }
+        }
+    
+        // Fetch recommendation history from your API
+        async function fetchRecommendationHistory() {
+            elements.loadingHistory.classList.remove('hidden');
+            elements.historyTableContainer.classList.add('hidden');
+    
+            try {
+                const url = `http://127.0.0.1:8000/recommendation_history?model_name=${state.model}&crypto=${state.crypto}`;
+                const response = await fetch(url);
+    
+                if (!response.ok) {
+                    throw new Error(`Erro ao buscar o histórico de recomendações: ${response.status}`);
+                }
+    
+                state.recommendationHistory = await response.json();
+                updateRecommendationHistoryUI();
+            } catch (error) {
+                console.error('Erro ao buscar o histórico de recomendações:', error);
+                // Em caso de erro na API, você pode mostrar uma mensagem informativa
+                elements.historyTableContainer.innerHTML = '<p class="text-red-500">Erro ao carregar o histórico de recomendações.</p>';
+            } finally {
+                elements.loadingHistory.classList.add('hidden');
+                elements.historyTableContainer.classList.remove('hidden');
+            }
+        }
+    
+        // Fetch candle data from Binance API (mantido como está)
+        async function fetchCandleData() {
+            elements.loadingChart.classList.remove('hidden');
+    
+            try {
+                const symbol = state.binanceSymbolMap[state.crypto];
+                const interval = state.intervalMap[state.interval];
+                const limit = 100; // Number of candles to fetch
+    
+                const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+                const response = await fetch(url);
+    
+                if (!response.ok) {
+                    throw new Error('Failed to fetch candle data from Binance');
+                }
+    
+                const data = await response.json();
+                state.candleData = data.map(candle => ({
+                    x: new Date(candle[0]).getTime(), // Open time
+                    y: [
+                        parseFloat(candle[1]), // Open
+                        parseFloat(candle[2]), // High
+                        parseFloat(candle[3]), // Low
+                        parseFloat(candle[4])   // Close
+                    ]
+                }));
+    
+                updateChartUI();
+            } catch (error) {
+                console.error('Error fetching candle data:', error);
+                // Você pode adicionar uma mensagem de erro no gráfico se desejar
+            } finally {
+                elements.loadingChart.classList.add('hidden');
+            }
+        }
+    
+        // Update last recommendation UI
+        function updateLastRecommendationUI() {
+            if (!state.lastRecommendation) return;
+    
+            const { Date: date, Time: time, recommendation, Price: price } = state.lastRecommendation;
+    
+            elements.lastRecDate.textContent = `${date} ${time}`;
+            elements.lastRecPrice.textContent = `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            elements.recommendationBadge.textContent = recommendation;
+    
+            // Apply styling based on recommendation
+            elements.recommendationBadge.className = 'text-4xl font-bold py-3 px-8 rounded-lg';
+            if (recommendation === 'Buy') {
+                elements.recommendationBadge.classList.add('recommendation-buy');
+            } else if (recommendation === 'Hold') {
+                elements.recommendationBadge.classList.add('recommendation-hold');
+            } else if (recommendation === 'Sell') {
+                elements.recommendationBadge.classList.add('recommendation-sell');
+            }
+        }
+    
+        // Update recommendation history UI
+        function updateRecommendationHistoryUI() {
+            if (!state.recommendationHistory || state.recommendationHistory.length === 0) {
+                elements.historyTableBody.innerHTML = '<tr><td colspan="4" class="text-center py-4">Nenhum histórico disponível.</td></tr>';
+                return;
+            }
+    
+            elements.historyTableBody.innerHTML = '';
+    
+            state.recommendationHistory.forEach(record => {
+                const row = document.createElement('tr');
+    
+                const dateCell = document.createElement('td');
+                dateCell.textContent = record.Date;
+                row.appendChild(dateCell);
+    
+                const timeCell = document.createElement('td');
+                timeCell.textContent = record.Time;
+                row.appendChild(timeCell);
+    
+                const recommendationCell = document.createElement('td');
+                const recommendationBadge = document.createElement('span');
+                recommendationBadge.textContent = record.recommendation;
+                recommendationBadge.className = 'px-2 py-1 rounded text-sm font-medium';
+    
+                if (record.recommendation === 'Buy') {
+                    recommendationBadge.classList.add('recommendation-buy');
+                } else if (record.recommendation === 'Hold') {
+                    recommendationBadge.classList.add('recommendation-hold');
+                } else if (record.recommendation === 'Sell') {
+                    recommendationBadge.classList.add('recommendation-sell');
+                }
+    
+                recommendationCell.appendChild(recommendationBadge);
+                row.appendChild(recommendationCell);
+    
+                const priceCell = document.createElement('td');
+                priceCell.textContent = `$${record.Price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                row.appendChild(priceCell);
+    
+                elements.historyTableBody.appendChild(row);
+            });
+        }
+    
+        // Update chart UI with candle data and recommendations
+        function updateChartUI() {
+                if (!state.chart || !state.candleData || state.candleData.length === 0) return;
+
+                // Update chart series with candle data
+                state.chart.updateSeries([{
+                    name: 'Candle',
+                    data: state.candleData
+                }]);
+
+                // Add recommendation markers with arrows (only Buy and Sell)
+                if (state.recommendationHistory && state.recommendationHistory.length > 0) {
+                    const annotations = state.recommendationHistory
+                        .filter(record => record.recommendation === 'Buy' || record.recommendation === 'Sell') // Filtra apenas Buy e Sell
+                        .map(record => {
+                            const timestamp = new Date(`${record.Date}T${record.Time}`).getTime();
+                            const yOffsetMarker = 20; // Ajuste para a distância do marcador ao candle
+                            const yOffsetTextBuy = 55; // Ajuste para a distância do texto "Buy" ao marcador
+                            const yOffsetTextSell = -20; // Ajuste para a distância do texto "Sell" ao marcador
+                            const markerSize = 5; // Tamanho do marcador
+
+                            let color = '';
+                            let borderColor = '';
+                            let markerSymbol = 'circle'; // Símbolo padrão (será alterado)
+                            let labelOffsetY = 0;
+                            let pointOffsetY = 0;
+
+                            if (record.recommendation === 'Buy') {
+                                color = '#10b981';
+                                borderColor = '#10b981';
+                                markerSymbol = 'triangle';
+                                pointOffsetY = yOffsetMarker;
+                                labelOffsetY = yOffsetTextBuy;
+                            } else if (record.recommendation === 'Sell') {
+                                color = '#ef4444';
+                                borderColor = '#ef4444';
+                                markerSymbol = 'triangleDown';
+                                pointOffsetY = -yOffsetMarker;
+                                labelOffsetY = yOffsetTextSell;
+                            }
+
+                            return {
+                                x: timestamp,
+                                y: record.Price,
+                                marker: {
+                                    size: markerSize,
+                                    fillColor: color,
+                                    strokeColor: borderColor,
+                                    shape: markerSymbol,
+                                    radius: 2,
+                                    offsetY: pointOffsetY
+                                },
+                                label: {
+                                    borderColor: borderColor,
+                                    offsetY: labelOffsetY,
+                                    style: {
+                                        color: '#fff',
+                                        background: color
+                                    },
+                                    text: record.recommendation,
+                                    position: 'bottom' // Força a posição do texto para baixo
+                                }
+                            };
+                        });
+
+                    state.chart.updateOptions({
+                        annotations: {
+                            points: annotations
+                        }
+                    });
+                }
+            } 
+        // Load all data
+        async function loadAllData() {
+            initializeChart();
+            await Promise.all([
+                fetchLastRecommendation(),
+                fetchRecommendationHistory(),
+                fetchCandleData()
+            ]);
+        }
+        
+        
+        // Event listeners
+        elements.modelSelect.addEventListener('change', function() {
+            state.model = this.value;
+        });
+    
+        elements.cryptoSelect.addEventListener('change', function() {
+            state.crypto = this.value;
+        });
+    
+        elements.intervalSelect.addEventListener('change', function() {
+            state.interval = this.value;
+        });
+    
+        elements.updateButton.addEventListener('click', loadAllData);
+    
+        // Initial load
+        document.addEventListener('DOMContentLoaded', loadAllData);
+
+
+            // Função para atualizar todos os dados
+        async function updateAllData() {
+            await Promise.all([
+                fetchLastRecommendation(),
+                fetchRecommendationHistory(),
+                fetchCandleData()
+            ]);
+            console.log('Dados atualizados em:', new Date().toLocaleTimeString()); // Feedback no console
+        }
+
+        // Define o intervalo de atualização (em milissegundos) - Exemplo: 5 minutos
+        const updateInterval = 5 * 60 * 1000; // 5 minutos * 60 segundos * 1000 milissegundos
+
+        // Inicia o temporizador para atualizar os dados periodicamente
+        setInterval(updateAllData, updateInterval);
+
+        // Carrega os dados iniciais ao carregar a página
+        document.addEventListener('DOMContentLoaded', loadAllData);
+    </script>
+</body>
+</html>
