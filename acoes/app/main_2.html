@@ -358,8 +358,10 @@
             try {
                 const symbol = state.binanceSymbolMap[state.crypto];
                 const interval = state.intervalMap[state.interval];
-                const limit = 100; // Number of candles to fetch
-    
+                const limit = 56; // Number of candles to fetch
+                //const timezoneOffset = 1 * 60 * 60 * 1000; // 3 horas em milissegundos
+                const timezoneOffset = 0; // 3 horas em milissegundos
+
                 const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
                 const response = await fetch(url);
     
@@ -369,7 +371,7 @@
     
                 const data = await response.json();
                 state.candleData = data.map(candle => ({
-                    x: new Date(candle[0]).getTime(), // Open time
+                    x: new Date(parseInt(candle[0]) - timezoneOffset).getTime(), // Open time 
                     y: [
                         parseFloat(candle[1]), // Open
                         parseFloat(candle[2]), // High
@@ -472,6 +474,7 @@
                             const yOffsetTextBuy = 55; // Ajuste para a distância do texto "Buy" ao marcador
                             const yOffsetTextSell = -20; // Ajuste para a distância do texto "Sell" ao marcador
                             const markerSize = 5; // Tamanho do marcador
+                            const timezoneOffset = 1 * 60 * 60 * 1000; // 1 horas em milissegundos
 
                             let color = '';
                             let borderColor = '';
@@ -494,7 +497,7 @@
                             }
 
                             return {
-                                x: timestamp,
+                                x: timestamp + timezoneOffset,
                                 y: record.Price,
                                 marker: {
                                     size: markerSize,
