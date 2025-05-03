@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Invest Advisor | Solução de Investimento Inteligente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .hero-gradient {
+            background: linear-gradient(135deg, #1e3a8a 0%, #0ea5e9 100%);
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .testimonial-card {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        }
+        .pricing-card:hover {
+            transform: scale(1.03);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .blink {
+            animation: blink-animation 1.5s infinite;
+        }
+        @keyframes blink-animation {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .demo-container {
+            border: 1px solid #334155;
+            border-radius: 0.75rem;
+            background-color: #0f172a;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100">
+    <!-- Navigation -->
+    <nav class="bg-gray-800 py-4 px-6 shadow-lg sticky top-0 z-50">
+        <div class="container mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <div class="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
+                    <i class="fas fa-brain text-white"></i>
+                </div>
+                <h1 class="text-xl font-bold">AI<span class="text-blue-300">Invest</span>Advisor</h1>
+            </div>
+            <div class="hidden md:flex space-x-8 items-center">
+                <a href="#features" class="hover:text-blue-300 transition">Recursos</a>
+                <a href="#cases" class="hover:text-blue-300 transition">Cases</a>
+                <a href="#pricing" class="hover:text-blue-300 transition">Planos</a>
+                <a href="#demo" class="hover:text-blue-300 transition">Demonstração</a>
+                <a href="#" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium transition">
+                    <i class="fas fa-user mr-2"></i>Login
+                </a>
+            </div>
+            <button class="md:hidden text-xl">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero-gradient py-20 px-6">
+        <div class="container mx-auto flex flex-col md:flex-row items-center">
+            <div class="md:w-1/2 mb-10 md:mb-0">
+                <div class="flex items-center mb-4">
+                    <span class="bg-white text-blue-800 px-3 py-1 rounded-full text-sm font-bold mr-3 blink">NOVO</span>
+                    <span class="text-blue-100">A solução mais avançada do mercado</span>
+                </div>
+                <h1 class="text-4xl md:text-5xl font-bold mb-6">Inteligência Artificial para seus Investimentos</h1>
+                <p class="text-xl text-blue-100 mb-8">Nossa plataforma analisa mercados, notícias e dados em tempo real para fornecer recomendações de investimento precisas e personalizadas.</p>
+                <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
+                    <a href="#pricing" class="bg-white text-blue-800 hover:bg-blue-100 px-8 py-3 rounded-lg font-bold text-center transition">
+                        Comece Agora
+                    </a>
+                    <a href="#demo" class="border-2 border-white text-white hover:bg-white hover:text-blue-800 px-8 py-3 rounded-lg font-bold text-center transition">
+                        Ver Demonstração
+                    </a>
+                </div>
+                <div class="mt-8 flex items-center space-x-4">
+                    <div class="flex -space-x-2">
+                        <img src="https://randomuser.me/api/portraits/women/12.jpg" class="w-10 h-10 rounded-full border-2 border-white">
+                        <img src="https://randomuser.me/api/portraits/men/32.jpg" class="w-10 h-10 rounded-full border-2 border-white">
+                        <img src="https://randomuser.me/api/portraits/women/44.jpg" class="w-10 h-10 rounded-full border-2 border-white">
+                    </div>
+                    <div>
+                        <p class="text-sm text-blue-100">Junte-se a <span class="font-bold">+5.000</span> investidores</p>
+                        <div class="flex items-center">
+                            <i class="fas fa-star text-yellow-400 mr-1"></i>
+                            <i class="fas fa-star text-yellow-400 mr-1"></i>
+                            <i class="fas fa-star text-yellow-400 mr-1"></i>
+                            <i class="fas fa-star text-yellow-400 mr-1"></i>
+                            <i class="fas fa-star text-yellow-400 mr-1"></i>
+                            <span class="text-sm ml-1">4.9/5</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="md:w-1/2">
+                <div class="demo-container p-1">
+                    <div class="bg-gray-800 rounded-lg overflow-hidden">
+                        <div class="bg-gray-700 p-3 flex items-center">
+                            <div class="flex space-x-2 mr-4">
+                                <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                                <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                                <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                            </div>
+                            <div class="bg-gray-600 text-xs px-2 py-1 rounded flex-1 text-center">
+                                dashboard.aiinvestadvisor.com/btc-analysis
+                            </div>
+                        </div>
+                        <div class="p-4">
+                            <div class="flex items-center mb-4">
+                                <img src="https://cryptologos.cc/logos/bitcoin-btc-logo.png" alt="BTC" class="w-8 h-8 mr-3">
+                                <div>
+                                    <h3 class="font-bold">Bitcoin (BTC)</h3>
+                                    <div class="flex items-center text-sm">
+                                        <span class="text-green-400 mr-2">$42,850.32</span>
+                                        <span class="text-green-400">+2.34%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-gray-700 rounded-lg h-48 mb-4 flex items-center justify-center">
+                                <div class="text-center">
+                                    <i class="fas fa-chart-line text-4xl text-blue-500 mb-2"></i>
+                                    <p>Gráfico de Análise em Tempo Real</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 mb-4">
+                                <div class="bg-blue-900 bg-opacity-50 p-2 rounded-lg">
+                                    <p class="text-xs text-blue-300">Recomendação</p>
+                                    <p class="font-bold text-green-400">COMPRAR</p>
+                                </div>
+                                <div class="bg-gray-700 p-2 rounded-lg">
+                                    <p class="text-xs text-gray-400">Confiança</p>
+                                    <p class="font-bold">82%</p>
+                                </div>
+                            </div>
+                            <div class="bg-gray-700 rounded-lg p-3">
+                                <p class="text-sm"><span class="text-green-400 font-bold">AI:</span> Padrão de alta identificado com alvo de $45,200. Stop-loss sugerido em $41,500.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Trust Badges -->
+    <div class="bg-gray-800 py-8">
+        <div class="container mx-auto px-6">
+            <p class="text-center text-gray-400 mb-6">Reconhecido e utilizado por:</p>
+            <div class="flex flex-wrap justify-center items-center gap-8 md:gap-16">
+                <img src="https://logo.clearbit.com/forbes.com" class="h-8 opacity-70 hover:opacity-100 transition" alt="Forbes">
+                <img src="https://logo.clearbit.com/bloomberg.com" class="h-8 opacity-70 hover:opacity-100 transition" alt="Bloomberg">
+                <img src="https://logo.clearbit.com/coindesk.com" class="h-8 opacity-70 hover:opacity-100 transition" alt="CoinDesk">
+                <img src="https://logo.clearbit.com/nasdaq.com" class="h-8 opacity-70 hover:opacity-100 transition" alt="Nasdaq">
+                <img src="https://logo.clearbit.com/binance.com" class="h-8 opacity-70 hover:opacity-100 transition" alt="Binance">
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Section -->
+    <section id="features" class="py-20 px-6 bg-gray-900">
+        <div class="container mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold mb-4">Tecnologia de Ponta para Investidores Exigentes</h2>
+                <p class="text-xl text-gray-400 max-w-3xl mx-auto">Nossa plataforma combina análise técnica, sentimento de mercado e inteligência artificial para fornecer vantagem competitiva.</p>
+            </div>
+            
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="feature-card bg-gray-800 rounded-xl p-8 transition cursor-pointer">
+                    <div class="w-14 h-14 bg-blue-600 rounded-lg flex items-center justify-center mb-6">
+                        <i class="fas fa-robot text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Análise AI em Tempo Real</h3>
+                    <p class="text-gray-400">Nossos algoritmos processam milhões de pontos de dados de mercado a cada segundo para identificar oportunidades antes do mercado.</p>
+                </div>
+                
+                <!-- Feature 2 -->
+                <div class="feature-card bg-gray-800 rounded-xl p-8 transition cursor-pointer">
+                    <div class="w-14 h-14 bg-purple-600 rounded-lg flex items-center justify-center mb-6">
+                        <i class="fas fa-newspaper text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Sentimento de Notícias</h3>
+                    <p class="text-gray-400">Análise NLP de milhares de fontes de notícias e redes sociais para medir o sentimento do mercado com precisão.</p>
+                </div>
+                
+                <!-- Feature 3 -->
+                <div class="feature-card bg-gray-800 rounded-xl p-8 transition cursor-pointer">
+                    <div class="w-14 h-14 bg-green-600 rounded-lg flex items-center justify-center mb-6">
+                        <i class="fas fa-chart-pie text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Indicadores Personalizados</h3>
+                    <p class="text-gray-400">Combinação exclusiva de indicadores técnicos adaptados ao seu perfil de risco e horizonte de investimento.</p>
+                </div>
+                
+                <!-- Feature 4 -->
+                <div class="feature-card bg-gray-800 rounded-xl p-8 transition cursor-pointer">
+                    <div class="w-14 h-14 bg-red-600 rounded-lg flex items-center justify-center mb-6">
+                        <i class="fas fa-bell text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Alertas Inteligentes</h3>
+                    <p class="text-gray-400">Notificações em tempo real quando padrões importantes são identificados ou quando seus ativos monitorados atingem níveis críticos.</p>
+                </div>
+                
+                <!-- Feature 5 -->
+                <div class="feature-card bg-gray-800 rounded-xl p-8 transition cursor-pointer">
+                    <div class="w-14 h-14 bg-yellow-600 rounded-lg flex items-center justify-center mb-6">
+                        <i class="fas fa-shield-alt text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Gestão de Risco</h3>
+                    <p class="text-gray-400">Recomendações automáticas de stop-loss e take-profit baseadas na volatilidade atual do ativo e seu perfil de risco.</p>
+                </div>
+                
+                <!-- Feature 6 -->
+                <div class="feature-card bg-gray-800 rounded-xl p-8 transition cursor-pointer">
+                    <div class="w-14 h-14 bg-indigo-600 rounded-lg flex items-center justify-center mb-6">
+                        <i class="fas fa-mobile-alt text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">Multiplataforma</h3>
+                    <p class="text-gray-400">Acesse suas análises e recomendações em qualquer dispositivo, com sincronização em tempo real entre plataformas.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="py-16 bg-gray-800">
+        <div class="container mx-auto px-6">
+            <div class="grid md:grid-cols-4 gap-8 text-center">
+                <div>
+                    <p class="text-5xl font-bold text-blue-400 mb-2">92%</p>
+                    <p class="text-gray-400">Taxa de acerto em recomendações</p>
+                </div>
+                <div>
+                    <p class="text-5xl font-bold text-blue-400 mb-2">24/7</p>
+                    <p class="text-gray-400">Monitoramento de mercados</p>
+                </div>
+                <div>
+                    <p class="text-5xl font-bold text-blue-400 mb-2">5.2x</p>
+                    <p class="text-gray-400">Retorno sobre benchmark</p>
+                </div>
+                <div>
+                    <p class="text-5xl font-bold text-blue-400 mb-2">0.3s</p>
+                    <p class="text-gray-400">Latência média de alertas</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Case Studies -->
+    <section id="cases" class="py-20 px-6 bg-gray-900">
+        <div class="container mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold mb-4">Resultados Reais com Nossa Tecnologia</h2>
+                <p class="text-xl text-gray-400 max-w-3xl mx-auto">Veja como nossos clientes estão transformando sua forma de investir.</p>
+            </div>
+            
+            <div class="grid lg:grid-cols-2 gap-8">
+                <!-- Case 1 -->
+                <div class="testimonial-card rounded-xl p-8">
+                    <div class="flex items-center mb-6">
+                        <img src="https://randomuser.me/api/portraits/women/43.jpg" class="w-16 h-16 rounded-full mr-4 border-2 border-blue-500">
+                        <div>
+                            <h3 class="font-bold text-lg">Mariana R.</h3>
+                            <p class="text-blue-400">Trader Institucional</p>
+                        </div>
+                    </div>
+                    <p class="text-gray-300 mb-6 italic">"Implementamos o AI Invest Advisor em nossa mesa de trading e em 3 meses aumentamos nossa taxa de acerto de 58% para 84%. A análise de sentimento de notícias nos permitiu antecipar movimentos do mercado que nossos modelos tradicionais não capturavam."</p>
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="text-sm text-gray-400">Retorno no período:</p>
+                            <p class="text-xl font-bold text-green-400">+37.5%</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-400">Benchmark:</p>
+                            <p class="text-xl font-bold">+12.2%</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Case 2 -->
+                <div class="testimonial-card rounded-xl p-8">
+                    <div class="flex items-center mb-6">
+                        <img src="https://randomuser.me/api/portraits/men/65.jpg" class="w-16 h-16 rounded-full mr-4 border-2 border-blue-500">
+                        <div>
+                            <h3 class="font-bold text-lg">Ricardo T.</h3>
+                            <p class="text-blue-400">Investidor Pessoal</p>
+                        </div>
+                    </div>
+                    <p class="text-gray-300 mb-6 italic">"Como investidor individual, não tinha tempo para analisar todos os dados do mercado. O AI Invest Advisor mudou completamente meu jogo. Em 6 meses, meu portfólio teve um desempenho 5x melhor que no ano anterior, com menos estresse e mais consistência."</p>
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="text-sm text-gray-400">Retorno no período:</p>
+                            <p class="text-xl font-bold text-green-400">+68.3%</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-400">Benchmark:</p>
+                            <p class="text-xl font-bold">+14.7%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-12 text-center">
+                <button class="border-2 border-blue-500 text-blue-400 hover:bg-blue-500 hover:text-white px-8 py-3 rounded-lg font-bold transition">
+                    Ver Todos os Cases de Sucesso
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Demo Section -->
+    <section id="demo" class="py-20 px-6 bg-gray-800">
+        <div class="container mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold mb-4">Experimente o Poder da Análise AI</h2>
+                <p class="text-xl text-gray-400 max-w-3xl mx-auto">Veja como nossa plataforma funciona com esta demonstração interativa.</p>
+            </div>
+            
+            <div class="bg-gray-900 rounded-xl overflow-hidden">
+                <div class="grid lg:grid-cols-2">
+                    <div class="p-8 lg:p-12">
+                        <h3 class="text-2xl font-bold mb-4">Demonstração do Dashboard</h3>
+                        <p class="text-gray-400 mb-6">Explore as principais funcionalidades da nossa plataforma com esta demonstração ao vivo. Veja como:</p>
+                        
+                        <ul class="space-y-3 mb-8">
+                            <li class="flex items-start">
+                                <i class="fas fa-check-circle text-green-400 mt-1 mr-3"></i>
+                                <span>Nossa AI analisa padrões de mercado em tempo real</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check-circle text-green-400 mt-1 mr-3"></i>
+                                <span>O sentimento de notícias é processado e quantificado</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check-circle text-green-400 mt-1 mr-3"></i>
+                                <span>Recomendações personalizadas são geradas</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check-circle text-green-400 mt-1 mr-3"></i>
+                                <span>Alertas inteligentes funcionam na prática</span>
+                            </li>
+                        </ul>
+                        
+                        <div class="bg-gray-800 rounded-lg p-4 mb-6">
+                            <div class="flex items-center mb-2">
+                                <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center mr-3">
+                                    <i class="fas fa-robot text-white"></i>
+                                </div>
+                                <p class="font-medium">Assistente AI</p>
+                            </div>
+                            <p class="text-sm text-gray-300">"Na demonstração ao lado, você pode interagir com nossa análise do Bitcoin. Clique nos diferentes indicadores para ver explicações detalhadas."</p>
+                        </div>
+                        
+                        <button class="bg-blue-600 hover:bg-blue-700 px-8 py-3 rounded-lg font-bold transition w-full lg:w-auto">
+                            Solicitar Demonstração Personalizada
+                        </button>
+                    </div>
+                    
+                    <div class="bg-gray-700 p-4 flex items-center justify-center">
+                        <div class="demo-container w-full max-w-lg">
+                            <div class="bg-gray-800 rounded-lg overflow-hidden">
+                                <div class="bg-gray-700 p-3 flex items-center">
+                                    <div class="flex space-x-2 mr-4">
+                                        <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                                        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                                        <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                                    </div>
+                                    <div class="bg-gray-600 text-xs px-2 py-1 rounded flex-1 text-center">
+                                        demo.aiinvestadvisor.com
+                                    </div>
+                                </div>
+                                <div class="p-4">
+                                    <div class="flex items-center mb-4">
+                                        <img src="https://cryptologos.cc/logos/bitcoin-btc-logo.png" alt="BTC" class="w-8 h-8 mr-3">
+                                        <div>
+                                            <h3 class="font-bold">Bitcoin (BTC)</h3>
+                                            <div class="flex items-center text-sm">
+                                                <span class="text-green-400 mr-2">$42,850.32</span>
+                                                <span class="text-green-400">+2.34%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gray-700 rounded-lg h-48 mb-4 flex items-center justify-center">
+                                        <div class="text-center">
+                                            <i class="fas fa-chart-line text-4xl text-blue-500 mb-2"></i>
+                                            <p>Demonstração Interativa</p>
+                                            <button class="mt-3 bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm">
+                                                Ativar Demonstração
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-2 mb-4">
+                                        <div class="bg-blue-900 bg-opacity-50 p-2 rounded-lg cursor-pointer hover:bg-opacity-70 transition">
+                                            <p class="text-xs text-blue-300">Técnico</p>
+                                            <p class="font-bold">82%</p>
+                                        </div>
+                                        <div class="bg-green-900 bg-opacity-50 p-2 rounded-lg cursor-pointer hover:bg-opacity-70 transition">
+                                            <p class="text-xs text-green-300">Sentimento</p>
+                                            <p class="font-bold">78%</p>
+                                        </div>
+                                        <div class="bg-purple-900 bg-opacity-50 p-2 rounded-lg cursor-pointer hover:bg-opacity-70 transition">
+                                            <p class="text-xs text-purple-300">Volume</p>
+                                            <p class="font-bold">94%</p>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gray-700 rounded-lg p-3">
+                                        <p class="text-sm"><span class="text-blue-400 font-bold">Clique</span> em qualquer métrica para ver a análise detalhada.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="py-20 px-6 bg-gray-900">
+        <div class="container mx-auto">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold mb-4">Planos para Todos os Perfis</h2>
+                <p class="text-xl text-gray-400 max-w-3xl mx-auto">Escolha o plano que melhor se adapta ao seu estilo de investimento.</p>
+            </div>
+            
+            <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                <!-- Basic Plan -->
+                <div class="pricing-card bg-gray-800 rounded-xl p-8 transition cursor-pointer">
+                    <h3 class="text-xl font-bold mb-2">Iniciante</h3>
+                    <p class="text-gray-400 mb-6">Para quem está começando no mercado</p>
+                    <div class="mb-6">
+                        <span class="text-4xl font-bold">R$99</span>
+                        <span class="text-gray-400">/mês</span>
+                    </div>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-start">
+                            <i class="fas fa-check text-green-400 mt-1 mr-3"></i>
+                            <span>5 recomendações diárias</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-check text-green-400 mt-1 mr-3"></i>
+                            <span>Análise técnica básica</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-check text-green-400 mt-1 mr-3"></i>
+                            <span>3 alertas personalizados</span>
+                        </li>
+                        <li class="flex items-start text-gray-500">
+                            <i class="fas fa-times mt-1 mr-3"></i>
+                            <span>Análise de sentimento</span>
+                        </li>
+                        <li class="flex items-start text-gray-500">
+                            <i class="fas fa-times mt-1 mr-3"></i>
+                            <span>Suporte prioritário</span>
+                        </li>
+                    </ul>
+                    <button class="w-full bg-gray-700 hover:bg-gray-600 py-3 rounded-lg font-medium transition">
+                        Assinar Plano
+                    </button>
+                </div>
+                
+                <!-- Pro Plan (Featured) -->
+                <div class="pricing-card bg-gradient-to-br from-blue-900 to-blue-800 rounded-xl p-8 transition cursor-pointer transform scale-105">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <h3 class="text-xl font-bold mb-2">Profissional</h3>
+                            <p class="text-blue-200 mb-6">O mais popular entre traders ativos</p>
+                        </div>
+                        <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm">RECOMENDADO</span>
+                    </div>
+                    <div class="mb-6">
+                        <span class="text-4xl font-bold">R$299</span>
+                        <span class="text-blue-200">/mês</span>
+                    </div>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-start">
+                            <i class="fas fa-check text-green-400 mt-1 mr-3"></i>
+                            <span>Recomendações ilimitadas</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-check text-green-400 mt-1 mr-3"></i>
+                            <span>Análise técnica avançada</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-check text-green-400 mt-1 mr-3"></i>
+                            <span>15 alertas personalizados</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-check text-green-400 mt-1 mr-3"></i>
+                            <span>Análise de sentimento completo</span>
+                        </li>
+                        <li class="flex items-start text-blue-200">
+                            <i class="fas fa-check mt-1 mr-3"></i>
+                            <span>Suporte por email</span>
+                        </li>
+                    </ul>
+                    <button class="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-lg font-medium transition">
+                        Assinar Plano
+                    </button>
+                </div>
+                
+                <!-- Institutional Plan -->
+                <div class="pricing-card bg-gray-800 rounded-xl p-8 transition cursor-pointer">
+                    <h3 class="text-xl font-bold mb-2">Institucional</h3>
+                    <p class="text-gray-400 mb-6">Para fundos e traders profissionais</p>
+                    <div class="mb-6">
+                        <span class="text-4xl font-bold">R$999</span>
+                        <span class="text-gray-400">/mês</span>
+                    </div>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-start">
+                            <i class="fas fa-check text-green-400 mt-1 mr-3"></i>
+                            <span>Todos os recursos Pro</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-check text-green-400 mt-1 mr-3"></i>
+                            <span>Alertas ilimitados</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-check text-green-400 mt-1 mr-3"></i>
+                            <span>API de integração</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-check text-green-400 mt-1 mr-3"></i>
+                            <span>Relatórios personalizados</span>
+                        </li>
+                        <li class="flex items-start">
+                            <i class="fas fa-check text-green-400 mt-1 mr-3"></i>
+                            <span>Suporte 24/7 dedicado</span>
+                        </li>
+                    </ul>
+                    <button class="w-full bg-gray-700 hover:bg-gray-600 py-3 rounded-lg font-medium transition">
+                        Assinar Plano
+                    </button>
+                </div>
+            </div>
+            
+            <div class="mt-12 bg-gray-800 rounded-xl p-8 max-w-4xl mx-auto">
+                <h3 class="text-xl font-bold mb-4 text-center">Comparativo de Planos</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b border-gray-700">
+                                <th class="text-left pb-4">Recurso</th>
+                                <th class="text-center pb-4">Iniciante</th>
+                                <th class="text-center pb-4">Profissional</th>
+                                <th class="text-center pb-4">Institucional</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="border-b border-gray-700">
+                                <td class="py-3">Recomendações diárias</td>
+                                <td class="text-center">5</td>
+                                <td class="text-center text-blue-400 font-medium">Ilimitadas</td>
+                                <td class="text-center text-blue-400 font-medium">Ilimitadas</td>
+                            </tr>
+                            <tr class="border-b border-gray-700">
+                                <td class="py-3">Análise de sentimento</td>
+                                <td class="text-center"><i class="fas fa-times text-red-400"></i></td>
+                                <td class="text-center text-blue-400 font-medium"><i class="fas fa-check text-green-400"></i></td>
+                                <td class="text-center text-blue-400 font-medium"><i class="fas fa-check text-green-400"></i></td>
+                            </tr>
+                            <tr class="border-b border-gray-700">
+                                <td class="py-3">Alertas personalizados</td>
+                                <td class="text-center">3</td>
+                                <td class="text-center">15</td>
+                                <td class="text-center text-blue-400 font-medium">Ilimitados</td>
+                            </tr>
+                            <tr class="border-b border-gray-700">
+                                <td class="py-3">Integração via API</td>
+                                <td class="text-center"><i class="fas fa-times text-red-400"></i></td>
+                                <td class="text-center"><i class="fas fa-times text-red-400"></i></td>
+                                <td class="text-center text-blue-400 font-medium"><i class="fas fa-check text-green-400"></i></td>
+                            </tr>
+                            <tr>
+                                <td class="py-3">Suporte</td>
+                                <td class="text-center">Email (48h)</td>
+                                <td class="text-center">Email (24h)</td>
+                                <td class="text-center text-blue-400 font-medium">Dedicado 24/7</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="py-20 px-6 bg-gradient-to-r from-blue-900 to-blue-700">
+        <div class="container mx-auto text-center">
+            <h2 class="text-3xl md:text-4xl font-bold mb-6">Pronto para Transformar seus Investimentos?</h2>
+            <p class="text-xl text-blue-200 max-w-3xl mx-auto mb-8">Junte-se a milhares de investidores que já estão usando inteligência artificial para tomar decisões mais inteligentes.</p>
+            <div class="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
+                <a href="#pricing" class="bg-white text-blue-800 hover:bg-blue-100 px-8 py-4 rounded-lg font-bold text-lg transition">
+                    Comece Agora - 7 Dias Grátis
+                </a>
+                <a href="#demo" class="border-2 border-white text-white hover:bg-white hover:text-blue-800 px-8 py-4 rounded-lg font-bold text-lg transition">
+                    Fale com um Especialista
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 py-12 px-6">
+        <div class="container mx-auto">
+            <div class="grid md:grid-cols-4 gap-8 mb-8">
+                <div>
+                    <div class="flex items-center space-x-2 mb-4">
+                        <div class="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
+                            <i class="fas fa-brain text-white"></i>
+                        </div>
+                        <h1 class="text-xl font-bold">AI<span class="text-blue-300">Invest</span>Advisor</h1>
+                    </div>
+                    <p class="text-gray-400 mb-4">A solução mais avançada em análise de investimentos com inteligência artificial.</p>
+                    <div class="flex space-x-4">
+                        <a href="#" class="text-gray-400 hover:text-white transition"><i class="fab fa-twitter"></i></a>
+                        <a href="#" class="text-gray-400 hover:text-white transition"><i class="fab fa-linkedin"></i></a>
+                        <a href="#" class="text-gray-400 hover:text-white transition"><i class="fab fa-instagram"></i></a>
+                        <a href="#" class="text-gray-400 hover:text-white transition"><i class="fab fa-youtube"></i></a>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-bold mb-4">Produto</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#features" class="text-gray-400 hover:text-white transition">Recursos</a></li>
+                        <li><a href="#pricing" class="text-gray-400 hover:text-white transition">Planos</a></li>
+                        <li><a href="#demo" class="text-gray-400 hover:text-white transition">Demonstração</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">Integrações</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">Atualizações</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-bold mb-4">Empresa</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">Sobre Nós</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">Carreiras</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">Parceiros</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">Imprensa</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">Contato</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-bold mb-4">Recursos</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">Blog</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">Tutoriais</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">Webinars</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">Documentação</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">API</a></li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center">
+                <p class="text-gray-400 mb-4 md:mb-0">© 2023 AI Invest Advisor. Todos os direitos reservados.</p>
+                <div class="flex space-x-6">
+                    <a href="#" class="text-gray-400 hover:text-white transition">Termos de Serviço</a>
+                    <a href="#" class="text-gray-400 hover:text-white transition">Política de Privacidade</a>
+                    <a href="#" class="text-gray-400 hover:text-white transition">Cookies</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Simple script for demo interaction
+        document.addEventListener('DOMContentLoaded', function() {
+            // Demo interaction
+            const demoMetrics = document.querySelectorAll('.demo-container .bg-opacity-50');
+            if (demoMetrics) {
+                demoMetrics.forEach(metric => {
+                    metric.addEventListener('click', function() {
+                        const demoMessage = document.querySelector('.demo-container .bg-gray-700.rounded-lg p');
+                        if (demoMessage) {
+                            const metricType = this.querySelector('p:first-child').textContent;
+                            demoMessage.innerHTML = `<span class="text-blue-400 font-bold">Análise ${metricType}:</span> Detalhes completos da métrica selecionada com insights da nossa AI.`;
+                        }
+                    });
+                });
+            }
+            
+            // Mobile menu toggle would go here
+        });
+    </script>
+</body>
+</html>

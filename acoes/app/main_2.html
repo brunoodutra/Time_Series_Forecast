@@ -132,9 +132,16 @@
                                 HOLD
                             </div>
                         </div>
+                        <section class="mb-5">
+                            <div class="card p-4 flex flex-col items-center">
+                                <div id="recommendationGauge" style="width: 320px; height: 180px; margin: 0 auto;"></div>
+                            </div>
+                        </section>
                     </div>
                 </div>
             </div>
+
+
         </header>
 
         <!-- Chart Section -->
@@ -300,7 +307,148 @@
             state.chart = new ApexCharts(elements.candleChart, options);
             state.chart.render();
         }
-    
+        function renderGauge() {
+            const gaugeContainer = document.querySelector("#recommendationGauge");
+            if (!gaugeContainer) return;
+
+            // Destrói a instância anterior do gauge, se existir
+            if (state.gaugeChart) {
+                state.gaugeChart.destroy();
+            }
+
+            let value = 50; // Valor padrão para 'Hold'
+            let recommendationText = '-';
+            let currentColor = '#f59e0b'; // Cor padrão para 'Hold'
+            let startAngle = -90;
+            let endAngle = 90;
+
+            if (state.lastRecommendation) {
+                recommendationText = state.lastRecommendation.recommendation;
+                if (recommendationText === 'Buy') {
+                    value = 100;
+                    currentColor = '#10b981';
+                } else if (recommendationText === 'Hold') {
+                    value = 50;
+                    currentColor = '#f59e0b';
+                } else if (recommendationText === 'Sell') {
+                    value = 0;
+                    currentColor = '#ef4444';
+                }
+            }
+
+            const options = {
+                series: [value],
+                chart: {
+                    height: 280,
+                    type: 'radialBar',
+                    toolbar: {
+                        show: false
+                    }
+                },
+                plotOptions: {
+                    radialBar: {
+                        startAngle: startAngle,
+                        endAngle: endAngle,
+                        hollow: {
+                            margin: 5,
+                            size: '60%',
+                            background: 'transparent',
+                            image: undefined,
+                        },
+                        track: {
+                            show: true,
+                            startAngle: undefined,
+                            endAngle: undefined,
+                            background: '#374151',
+                            strokeWidth: '97%',
+                            opacity: 1,
+                            margin: 5,
+                        },
+                        dataLabels: {
+                            name: {
+                                show: false
+                            },
+                            value: {
+                                offsetY: 0,
+                                color: currentColor,
+                                fontSize: '24px',
+                                fontWeight: 'bold',
+                                formatter: function(val) {
+                                    return recommendationText.toUpperCase();
+                                }
+                            }
+                        },
+                        // Adiciona o ponteiro
+                        fill: {
+                            type: 'gradient',
+                            gradient: {
+                                shade: 'dark',
+                                type: 'horizontal',
+                                shadeIntensity: 0.5,
+                                gradientToColors: [currentColor],
+                                inverseColors: false,
+                                opacityFrom: 1,
+                                opacityTo: 1,
+                                stops: [0, 100]
+                            }
+                        }
+                    }
+                },
+                stroke: {
+                    lineCap: 'round',
+                    dashArray: 5 // Cria um efeito de ponteiro
+                },
+                // Adiciona as labels Sell, Hold, Buy
+                annotations: {
+                    points: [
+                        {
+                            x: 50,
+                            y: 90,
+                            label: {
+                                text: 'SELL',
+                                textAnchor: 'middle',
+                                style: {
+                                    color: '#ef4444',
+                                    fontSize: '14px',
+                                    fontWeight: 'bold'
+                                }
+                            }
+                        },
+                        {
+                            x: 50,
+                            y: 50,
+                            label: {
+                                text: 'HOLD',
+                                textAnchor: 'middle',
+                                style: {
+                                    color: '#f59e0b',
+                                    fontSize: '14px',
+                                    fontWeight: 'bold'
+                                }
+                            }
+                        },
+                        {
+                            x: 50,
+                            y: 10,
+                            label: {
+                                text: 'BUY',
+                                textAnchor: 'middle',
+                                style: {
+                                    color: '#10b981',
+                                    fontSize: '14px',
+                                    fontWeight: 'bold'
+                                }
+                            }
+                        }
+                    ]
+                },
+                colors: [currentColor],
+                labels: [''],
+            };
+
+            state.gaugeChart = new ApexCharts(gaugeContainer, options);
+            state.gaugeChart.render();
+        }
         // Fetch last recommendation from your API
         async function fetchLastRecommendation() {
             elements.loadingLastRec.classList.remove('hidden');
@@ -358,7 +506,7 @@
             try {
                 const symbol = state.binanceSymbolMap[state.crypto];
                 const interval = state.intervalMap[state.interval];
-                const limit = 56; // Number of candles to fetch
+                const limit = 100; // Number of candles to fetch
                 //const timezoneOffset = 1 * 60 * 60 * 1000; // 3 horas em milissegundos
                 const timezoneOffset = 0; // 3 horas em milissegundos
 
@@ -408,6 +556,8 @@
             } else if (recommendation === 'Sell') {
                 elements.recommendationBadge.classList.add('recommendation-sell');
             }
+            renderGauge(); // Atualiza o gauge visual!
+
         }
     
         // Update recommendation history UI

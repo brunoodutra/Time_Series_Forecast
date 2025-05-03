@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoAdvisor - Recomendação de Investimentos</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
+    
+    <style>
+        .gauge-container {
+            width: 100%;
+            max-width: 250px;
+            margin: 0 auto;
+            position: relative;
+        }
+        
+        .gauge {
+            width: 100%;
+            height: 0;
+            padding-bottom: 50%;
+            position: relative;
+            border-top-left-radius: 100% 200%;
+            border-top-right-radius: 100% 200%;
+            overflow: hidden;
+            background: #23293a;
+        }
+        
+        .gauge-cover {
+            width: 70%;
+            height: 140%;
+            background: #181e29;
+            border-radius: 50%;
+            position: absolute;
+            top: 20%;
+            left: 15%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        
+        .gauge-fill {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform-origin: center top;
+            transform: rotate(0.5turn);
+            transition: transform 1s ease-out;
+        }
+        
+        .gauge-fill::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to right, #ef4444 0%, #f59e0b 50%, #10b981 100%);
+        }
+        
+        .gauge-pointer {
+            width: 4px;
+            height: 40%;
+            background: white;
+            position: absolute;
+            left: 50%;
+            top: 10%;
+            transform-origin: bottom center;
+            transform: rotate(0turn);
+            transition: transform 1s ease-out;
+            z-index: 10;
+        }
+        
+        .gauge-labels {
+            position: absolute;
+            width: 100%;
+            top: 10px;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 10%;
+            box-sizing: border-box;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .recommendation-buy {
+            background-color: #10b981;
+        }
+        
+        .recommendation-sell {
+            background-color: #ef4444;
+        }
+        
+        .recommendation-hold {
+            background-color: #f59e0b;
+        }
+        
+        .scrollable-table {
+            overflow-x: auto;
+        }
+        
+        @media (max-width: 768px) {
+            .flex-col-mobile {
+                flex-direction: column;
+            }
+            
+            .w-full-mobile {
+                width: 100% !important;
+            }
+        }
+
+        /* Estilos para o gráfico */
+        #chart-container {
+            position: relative;
+            width: 100%;
+            height: 500px;
+        }
+
+        .chart-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 100;
+            display: flex;
+            gap: 5px;
+        }
+
+        .chart-controls button {
+            background-color: rgba(35, 41, 58, 0.8);
+            border: 1px solid #3a4255;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .chart-controls button:hover {
+            background-color: rgba(35, 41, 58, 1);
+        }
+    </style>
+</head>
+<body class="bg-[#181e29] text-gray-200 min-h-screen">
+    <header class="bg-[#23293a] py-6 px-4 shadow-lg">
+        <div class="container mx-auto">
+            <h1 class="text-3xl font-bold text-center text-blue-400">CryptoAdvisor</h1>
+            <p class="text-center mt-2 text-gray-400 max-w-2xl mx-auto">
+                Sistema de recomendação de investimentos em criptomoedas baseado em modelos de inteligência artificial.
+                Visualize recomendações de compra, venda ou manutenção para seus ativos favoritos.
+            </p>
+        </div>
+    </header>
+
+    <main class="container mx-auto py-6 px-4">
+        <section class="bg-[#23293a] rounded-lg shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4 text-blue-300">Configurações</h2>
+            <div class="flex flex-wrap gap-4 items-end">
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-sm font-medium mb-1">Modelo de Análise</label>
+                    <select id="model-select" class="w-full bg-[#181e29] border border-[#3a4255] rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="CNN">CNN</option>
+                        <option value="LSTM">LSTM</option>
+                    </select>
+                </div>
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-sm font-medium mb-1">Criptomoeda</label>
+                    <select id="crypto-select" class="w-full bg-[#181e29] border border-[#3a4255] rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="BTC">Bitcoin (BTC)</option>
+                        <option value="ETH">Ethereum (ETH)</option>
+                        <option value="BNB">Binance Coin (BNB)</option>
+                    </select>
+                </div>
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-sm font-medium mb-1">Intervalo</label>
+                    <select id="interval-select" class="w-full bg-[#181e29] border border-[#3a4255] rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="4h">4 Horas</option>
+                        <option value="1h">1 Hora</option>
+                        <option value="1d">1 Dia</option>
+                    </select>
+                </div>
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-sm font-medium mb-1">Número de Candles</label>
+                    <select id="limit-select" class="w-full bg-[#181e29] border border-[#3a4255] rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="200">200</option>
+                        <option value="500">500</option>
+                    </select>
+                </div>
+                <div class="flex-1 min-w-[150px]">
+                    <button id="update-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-200">
+                        Atualizar
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <section class="flex flex-col md:flex-row gap-6 mb-6">
+            <div class="bg-[#23293a] rounded-lg shadow-lg p-6 flex-1">
+                <h2 class="text-xl font-semibold mb-4 text-blue-300">Última Recomendação</h2>
+                <div id="last-recommendation-content">
+                    <div class="flex flex-col md:flex-row gap-6 items-center">
+                        <div class="gauge-container">
+                            <div class="gauge">
+                                <div class="gauge-fill"></div>
+                                <div class="gauge-pointer"></div>
+                                <div class="gauge-labels">
+                                    <span>Sell</span>
+                                    <span>Hold</span>
+                                    <span>Buy</span>
+                                </div>
+                            </div>
+                            <div class="gauge-cover">
+                                <span id="gauge-value">0</span>
+                            </div>
+                        </div>
+                        <div class="flex-1">
+                            <div id="recommendation-card" class="p-4 rounded-lg mb-4">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="font-medium">Recomendação:</span>
+                                    <span id="recommendation-text" class="font-bold px-3 py-1 rounded-full"></span>
+                                </div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="font-medium">Data/Hora:</span>
+                                    <span id="recommendation-date" class="font-medium"></span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="font-medium">Preço:</span>
+                                    <span id="recommendation-price" class="font-medium"></span>
+                                </div>
+                            </div>
+                            <div class="text-sm text-gray-400">
+                                <p>Última atualização: <span id="last-update-time"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-[#23293a] rounded-lg shadow-lg p-6 mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-blue-300">Gráfico de Preço e Recomendações</h2>
+            </div>
+            <div id="chart-container">
+                <div class="chart-controls">
+                    <button id="zoom-in">+</button>
+                    <button id="zoom-out">-</button>
+                    <button id="reset-zoom">Reset</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-[#23293a] rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-semibold mb-4 text-blue-300">Histórico de Recomendações</h2>
+            <div id="history-content">
+                <div class="scrollable-table">
+                    <table class="min-w-full divide-y divide-[#3a4255]">
+                        <thead>
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Data</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Hora</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Recomendação</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Preço</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Modelo</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body" class="divide-y divide-[#3a4255]">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="bg-[#23293a] py-6 px-4 mt-8">
+        <div class="container mx-auto text-center text-gray-400 text-sm">
+            <p>&copy; 2023 CryptoAdvisor. Todos os direitos reservados.</p>
+            <p class="mt-2">Este sistema tem fins educacionais e não deve ser considerado como aconselhamento financeiro.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Variáveis globais
+        let priceChart;
+        let lastRecommendation = null;
+        let recommendationHistory = [];
+        let candleData = [];
+        let updateInterval;
+        
+        // Mapeamento de símbolos para Binance
+        const cryptoMap = {
+            'BTC': 'BTCUSDT',
+            'ETH': 'ETHUSDT',
+            'BNB': 'BNBUSDT'
+        };
+        
+        // Mapeamento de recomendações para valores numéricos
+        const recommendationValues = {
+            'Sell': 0,
+            'Hold': 0.5,
+            'Buy': 1
+        };
+        
+        // Mapeamento de recomendações para classes CSS
+        const recommendationClasses = {
+            'Sell': 'recommendation-sell',
+            'Hold': 'recommendation-hold',
+            'Buy': 'recommendation-buy'
+        };
+        
+        // Mapeamento de recomendações para textos
+        const recommendationTexts = {
+            'Sell': 'SELL',
+            'Hold': 'HOLD',
+            'Buy': 'BUY'
+        };
+        
+        // Função para buscar dados da Binance API
+        async function fetchCandleData(crypto, interval, limit) {
+            const symbol = cryptoMap[crypto];
+            const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+            
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error('Erro ao buscar dados da Binance API');
+                }
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                console.error('Erro ao buscar dados:', error);
+                return null;
+            }
+        }
+        
+        // Função para buscar a última recomendação da API
+        async function fetchLastRecommendation(model, crypto) {
+            const url = `http://127.0.0.1:8000/last_recommendation?model_name=${model}&crypto=${crypto}`;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`Erro ao buscar a última recomendação: ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error('Erro ao buscar última recomendação:', error);
+                return null;
+            }
+        }
+        
+        // Função para buscar o histórico de recomendações da API
+        async function fetchRecommendationHistory(model, crypto) {
+            const url = `http://127.0.0.1:8000/recommendation_history?model_name=${model}&crypto=${crypto}`;
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`Erro ao buscar histórico de recomendações: ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error('Erro ao buscar histórico de recomendações:', error);
+                return null;
+            }
+        }
+        
+        // Inicialização quando o DOM estiver carregado
+        document.addEventListener('DOMContentLoaded', function() {
+            // Configurar event listeners
+            document.getElementById('update-btn').addEventListener('click', updateAllData);
+            
+            // Carregar dados iniciais
+            updateAllData();
+            
+            // Configurar atualização automática a cada 5 minutos
+            updateInterval = setInterval(updateAllData, 5 * 60 * 1000);
+        });
+        
+        // Atualizar todos os dados
+        async function updateAllData() {
+            const model = document.getElementById('model-select').value;
+            const crypto = document.getElementById('crypto-select').value;
+            const interval = document.getElementById('interval-select').value;
+            const limit = document.getElementById('limit-select').value;
+            
+            // Buscar dados da API para última recomendação
+            const lastRecData = await fetchLastRecommendation(model, crypto);
+            if (lastRecData) {
+                lastRecommendation = lastRecData;
+                updateLastRecommendationUI();
+            }
+            
+            // Buscar dados da API para histórico de recomendações
+            const historyData = await fetchRecommendationHistory(model, crypto);
+            if (historyData) {
+                recommendationHistory = historyData;
+                updateRecommendationHistoryUI();
+            }
+            
+            // Buscar dados reais da Binance API para o gráfico
+            const binanceData = await fetchCandleData(crypto, interval, limit);
+            if (binanceData) {
+                candleData = binanceData;
+                updateChartUI();
+            } else {
+                console.log('Erro ao buscar dados da Binance. Usando dados mockados.');
+                candleData = generateMockCandles(crypto, interval, limit);
+                updateChartUI();
+            }
+            
+            // Atualizar hora da última atualização
+            updateLastUpdateTime();
+        }
+        
+        // Gerar candles mockados (apenas para fallback)
+        function generateMockCandles(crypto, interval, limit) {
+            const candles = [];
+            const now = Date.now();
+            const basePrice = crypto === 'BTC' ? 30000 : crypto === 'ETH' ? 2000 : 300;
+            
+            // Converter intervalo para milissegundos
+            let intervalMs;
+            switch(interval) {
+                case '1h': intervalMs = 3600000; break;
+                case '4h': intervalMs = 14400000; break;
+                case '1d': intervalMs = 86400000; break;
+                default: intervalMs = 3600000;
+            }
+            
+            for (let i = 0; i < limit; i++) {
+                const open = basePrice + (Math.random() * 1000 - 500);
+                const close = open + (Math.random() * 1000 - 500);
+                const high = Math.max(open, close) + Math.random() * 200;
+                const low = Math.min(open, close) - Math.random() * 200;
+                
+                candles.push([
+                    now - i * intervalMs,
+                    open.toFixed(2),
+                    high.toFixed(2),
+                    low.toFixed(2),
+                    close.toFixed(2),
+                    '1000'
+                ]);
+            }
+            
+            return candles.reverse(); // Ordenar do mais antigo para o mais recente
+        }
+        
+        // Atualizar UI da última recomendação
+        function updateLastRecommendationUI() {
+            if (!lastRecommendation) return;
+            
+            const recommendation = lastRecommendation.recommendation;
+            const recommendationValue = recommendationValues[recommendation];
+            
+            // Atualizar texto da recomendação
+            document.getElementById('recommendation-text').textContent = recommendationTexts[recommendation];
+            
+            // Adicionar o timezone offset à data/hora
+            const timezoneOffset = 3 * 60 * 60 * 1000; // 3 horas em milissegundos para GMT-3
+            const recommendationDate = new Date(Date.parse(lastRecommendation.Date + ' ' + lastRecommendation.Time) - timezoneOffset);
+            
+            const formattedDate = recommendationDate.toLocaleDateString('pt-BR');
+            const formattedTime = recommendationDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            
+            document.getElementById('recommendation-date').textContent = `${formattedDate} ${formattedTime}`;
+            document.getElementById('recommendation-price').textContent = `$${lastRecommendation.Price}`;
+            
+            // Atualizar card de recomendação
+            const recommendationCard = document.getElementById('recommendation-card');
+            recommendationCard.className = 'p-4 rounded-lg mb-4';
+            recommendationCard.classList.add(recommendationClasses[recommendation]);
+            
+            // Atualizar gauge
+            const gaugeFill = document.querySelector('.gauge-fill');
+            const gaugePointer = document.querySelector('.gauge-pointer');
+            const gaugeValue = document.getElementById('gauge-value');
+            
+            // Converter valor da recomendação para ângulo (0 a 180 graus)
+            const angle = recommendationValue * 180;
+            gaugeFill.style.transform = `rotate(${angle / 180}turn)`;
+            gaugePointer.style.transform = `rotate(${angle / 180}turn)`;
+            gaugeValue.textContent = recommendationTexts[recommendation];
+        }
+        
+        // Atualizar UI do histórico de recomendações
+        function updateRecommendationHistoryUI() {
+            const tableBody = document.getElementById('history-table-body');
+            tableBody.innerHTML = '';
+            
+            recommendationHistory.forEach(item => {
+                // Adicionar o timezone offset à data/hora
+                const timezoneOffset = 3 * 60 * 60 * 1000; // 3 horas em milissegundos para GMT-3
+                const recommendationDate = new Date(Date.parse(item.Date + ' ' + item.Time) - timezoneOffset);
+                
+                const formattedDate = recommendationDate.toLocaleDateString('pt-BR');
+                const formattedTime = recommendationDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                
+                const row = document.createElement('tr');
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">${formattedDate}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">${formattedTime}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">
+                        <span class="px-2 py-1 rounded-full ${recommendationClasses[item.recommendation]}">
+                            ${recommendationTexts[item.recommendation]}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">$${item.Price}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm">${item.Model}</td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+        }
+        
+        // Atualizar UI do gráfico
+        function updateChartUI() {
+            const chartContainer = document.getElementById('chart-container');
+            
+            // Limpar o gráfico existente
+            if (priceChart) {
+                priceChart.remove();
+            }
+            
+            // Criar novo gráfico
+            priceChart = LightweightCharts.createChart(chartContainer, {
+                width: chartContainer.clientWidth,
+                height: 500,
+                layout: {
+                    backgroundColor: '#181e29',
+                    textColor: '#a0aec0',
+                },
+                grid: {
+                    vertLines: {
+                        color: '#3a4255',
+                    },
+                    horzLines: {
+                        color: '#3a4255',
+                    },
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                },
+                rightPriceScale: {
+                    borderColor: '#3a4255',
+                },
+                timeScale: {
+                    borderColor: '#3a4255',
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+            });
+
+            // Adicionar série de candlesticks
+            const candlestickSeries = priceChart.addCandlestickSeries({
+                upColor: '#10b981',
+                downColor: '#ef4444',
+                borderDownColor: '#ef4444',
+                borderUpColor: '#10b981',
+                wickDownColor: '#ef4444',
+                wickUpColor: '#10b981',
+            });
+
+            // Formatar dados para o gráfico
+            const formattedData = candleData.map(item => ({
+                time: item[0] / 1000, //Converter timestamp para segundos
+                open: parseFloat(item[1]),
+                high: parseFloat(item[2]),
+                low: parseFloat(item[3]),
+                close: parseFloat(item[4]),
+            }));
+
+            // Definir dados no gráfico
+            candlestickSeries.setData(formattedData);
+
+            // Adicionar marcadores de recomendações
+            const markers = [];
+            recommendationHistory.forEach(rec => {
+                // Converter data/hora da recomendação para timestamp
+                const [day, month, year] = rec.Date.split('/');
+                const [hours, minutes] = rec.Time.split(':');
+                const recDate = new Date(year, month - 1, day, hours, minutes);
+                
+                // Aplicar o timezone offset
+                const timezoneOffset = 3 * 60 * 60 * 1000; // 3 horas em milissegundos para GMT-3
+                
+                const timestamp = new Date(`${rec.Date}T${rec.Time}`).getTime();
+                const recTime = (timestamp + timezoneOffset)/1000 ;
+                // Encontrar o candle mais próximo no tempo
+                const closestCandle = formattedData.reduce((prev, curr) => {
+                    return (Math.abs(curr.time - recTime) < Math.abs(prev.time - recTime)) ? curr : prev;});
+                
+                // Adicionar marcador apenas se a diferença de tempo for pequena (dentro do intervalo do candle)
+                if (Math.abs(closestCandle.time - recTime) < 3600000 && (rec.recommendation === 'Buy' || rec.recommendation === 'Sell')) { // 1 hora de tolerância (em milissegundos)
+                    markers.push({
+                        time: closestCandle.time,
+                        position: rec.recommendation === 'Buy' ? 'belowBar' : 'aboveBar',
+                        color: rec.recommendation === 'Buy' ? '#10b981' : '#ef4444',
+                        shape: rec.recommendation === 'Buy' ? 'arrowUp' : 'arrowDown',
+                        text: rec.recommendation,
+                    });
+                }
+
+                else{
+                    console.log('Erro ao inserir as recomendações no gráfico');
+                }
+            });
+
+            candlestickSeries.setMarkers(markers);
+
+            // Configurar controles de zoom
+            document.getElementById('zoom-in').addEventListener('click', () => {
+                priceChart.timeScale().applyOptions({
+                    barSpacing: Math.max(0.5, priceChart.timeScale().options().barSpacing * 0.8)
+                });
+            });
+
+            document.getElementById('zoom-out').addEventListener('click', () => {
+                priceChart.timeScale().applyOptions({
+                    barSpacing: Math.min(10, priceChart.timeScale().options().barSpacing * 1.2)
+                });
+            });
+
+            document.getElementById('reset-zoom').addEventListener('click', () => {
+                priceChart.timeScale().applyOptions({
+                    barSpacing: 6
+                });
+            });
+
+            // Ajustar o gráfico quando a janela for redimensionada
+            window.addEventListener('resize', () => {
+                priceChart.applyOptions({ width: chartContainer.clientWidth });
+            });
+        }
+        
+        // Atualizar hora da última atualização
+        function updateLastUpdateTime() {
+            const now = new Date();
+            document.getElementById('last-update-time').textContent = 
+                `${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}`;
+        }
+    </script>
+</body>
+</html>
