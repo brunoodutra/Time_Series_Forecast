@@ -1,0 +1,65 @@
+Gere um código HTML, CSS e JavaScript completo para um sistema web de recomendação de investimentos em criptomoedas com as seguintes características:
+
+**Objetivo Geral:**
+Criar um painel web responsivo que exiba a última recomendação de investimento (Compra, Venda ou Manter) para um determinado modelo de análise e criptomoeda, juntamente com um gráfico de velas do preço do ativo e um histórico de recomendações. O painel deve permitir ao usuário selecionar diferentes modelos de análise, criptomoedas e intervalos de tempo para visualização.
+
+**Requisitos Específicos:**
+
+1.  **Layout:**
+    * Utilizar Tailwind CSS para o estilo visual, com um tema escuro similar ao exemplo fornecido (background #181e29, cards #23293a, cores de texto e destaque).
+    * O layout deve ser responsivo, adaptando-se a diferentes tamanhos de tela (desktop e mobile).
+    * Incluir um cabeçalho com o título "CryptoAdvisor" e uma breve descrição.
+    * Organizar o conteúdo em seções bem definidas (Controles, Última Recomendação, Indicador Visual, Gráfico de Preço e Recomendações, Histórico de Recomendações, Rodapé).
+
+2.  **Controles do Usuário:**
+    * Implementar dropdowns (`<select>`) para permitir a seleção de:
+        * Modelo de análise (CNN, LSTM).
+        * Criptomoeda (BTC, ETH, BNB).
+        * Intervalo de tempo para o gráfico (1h, 4h, 1d).
+        * Número de candles a exibir no gráfico (50, 100, 200, 500).
+    * Incluir um botão "Atualizar" que aciona a busca e atualização dos dados.
+
+3.  **Visualização da Última Recomendação:**
+    * Exibir a data e hora da última recomendação.
+    * Mostrar a recomendação em destaque (Compra, Venda, Manter) com uma cor de fundo correspondente (verde, vermelho, amarelo/laranja).
+    * Exibir o preço do ativo no momento da recomendação.
+    * Incluir um indicador visual (gauge) que represente a recomendação atual de forma gráfica, com divisões de cores para Compra, Venda e Manter e um ponteiro indicando o valor atual. O buraco central do gauge deve ser transparente e as labels "Sell", "Hold" e "Buy" devem aparecer na parte superior.
+
+4.  **Gráfico de Preço e Recomendações:**
+    * Exibir um gráfico de velas (candlestick chart) do preço da criptomoeda selecionada.
+    * Integrar marcadores visuais no gráfico para indicar os momentos das recomendações de Compra e Venda do histórico. A última recomendação deve ter um marcador diferenciado.
+    * Incluir controles de zoom (in, out, reset) para o gráfico.
+    * Incluir régua para identificar a porcentagem de um ponto ao outro entre candles
+
+5.  **Histórico de Recomendações:**
+    * Exibir uma tabela com o histórico de recomendações, incluindo data, hora, recomendação e preço.
+    * A tabela deve ser scrollável horizontalmente em telas menores.
+
+6.  **Acesso a APIs (Simulação):**
+    * Simular a comunicação com um backend para obter os dados:
+	Obtenção das recomendações:
+        * `http://127.0.0.1:8000/last_recommendation?model_name=[MODELO]&crypto=[CRIPTOMOEDA]` (retorna um JSON com `Date`, `Time`, `recommendation`, `Price`).
+        * `http://127.0.0.1:8000/recommendation_history?model_name=[MODELO]&crypto=[CRIPTOMOEDA]`;` (retorna um array de JSONs com `Date`, `Time`, `recommendation`, `Price`).
+
+	ex: 
+		const url = `http://127.0.0.1:8000/last_recommendation?model_name=${state.model}&crypto=${state.crypto}`;
+                const response = await fetch(url);
+    
+                if (!response.ok) {
+                    throw new Error(`Erro ao buscar a última recomendação: ${response.status}`);
+                }
+    
+                state.lastRecommendation = await response.json();
+		const { Date: date, Time: time, recommendation, Price: price } = state.lastRecommendation;
+		
+        Obtenção de dados de candles da Binance API 
+	    *estrutura de endpoint: `https://api.binance.com/api/v3/klines?symbol=[SYMBOL]&interval=[INTERVAL]&limit=[LIMIT]` (retorna um array de arrays com os dados do candle: `[timestamp, open, high, low, close, ...]`). Mapear os símbolos das criptomoedas para o formato da Binance (ex: BTC -> BTCUSDT).
+
+7.  **Atualização:**
+    * Implementar a lógica JavaScript para buscar e atualizar os dados quando o usuário interage com os controles ou clica no botão "Atualizar".
+    * Considerar uma atualização automática dos dados a cada 5 minutos.
+    * Exibir um indicador de carregamento enquanto os dados estão sendo buscados.
+    * Exibir a data e hora da última atualização.
+
+8.  **Rodapé:**
+    * Incluir um rodapé com informações de direitos autorais e uma nota sobre a natureza educacional do sistema.
