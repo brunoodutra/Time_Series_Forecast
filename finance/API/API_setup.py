@@ -20,7 +20,7 @@ app.add_middleware(
 
 # function to get the last recomendation
 def get_last_recommendation(model_name: str, crypto: str):
-    file_path = f'Recommendations/{model_name}_{crypto}_recommendation.csv'
+    file_path = f'./../AI/Classification/Real_Time_Inference/Recommendations/{model_name}_{crypto}_recommendation.csv'
     try:
         # Specify the delimiter (in this case, a comma)
         df = pd.read_csv(file_path, sep=',', header=0)
@@ -43,7 +43,7 @@ def get_last_recommendation(model_name: str, crypto: str):
         return None
 
 def get_recommendation_history(model_name: str, crypto: str):
-    file_path = f'Recommendations/{model_name}_{crypto}_recommendation.csv'
+    file_path = f'./../AI/Classification/Real_Time_Inference/Recommendations/{model_name}_{crypto}_recommendation.csv'
     if os.path.exists(file_path):
         df = pd.read_csv(file_path)
         history = []
