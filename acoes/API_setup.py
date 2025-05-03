@@ -21,16 +21,25 @@ app.add_middleware(
 # function to get the last recomendation
 def get_last_recommendation(model_name: str, crypto: str):
     file_path = f'Recommendations/{model_name}_{crypto}_recommendation.csv'
-    if os.path.exists(file_path):
-        df = pd.read_csv(file_path)
+    try:
+        # Specify the delimiter (in this case, a comma)
+        df = pd.read_csv(file_path, sep=',', header=0)
         last_recommendation = df.iloc[-1]
         return {
             'Date': last_recommendation['Date'],
             'Time': last_recommendation['Time'],
             'recommendation': last_recommendation['recommendation'],
+            'percentage': last_recommendation['percentage'],
             'Price': last_recommendation['Price'],
         }
-    else:
+    except pd.errors.ParserError as e:
+        print(f"Error parsing CSV file: {e}")
+        return None
+    except FileNotFoundError:
+        print(f"File not found: {file_path}")
+        return None
+    except Exception as e:
+        print(f"An error occurred: {e}")
         return None
 
 def get_recommendation_history(model_name: str, crypto: str):
@@ -43,6 +52,7 @@ def get_recommendation_history(model_name: str, crypto: str):
                 'Date': row['Date'],
                 'Time': row['Time'],
                 'recommendation': row['recommendation'],
+                'percentage': row['percentage'],
                 'Price': row['Price'],
             })
         return history
