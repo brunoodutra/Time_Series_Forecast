@@ -27,7 +27,7 @@ import joblib
 
 
 import os, sys
-processing_source_path = os.path.abspath('Processing/')
+processing_source_path = os.path.abspath('./../../Processing/')
 if(processing_source_path not in sys.path):
     sys.path.append(processing_source_path)
 from DataLoaderPipeline import FeaturesDataGenerator, scrapingHistoricalData
@@ -52,15 +52,16 @@ interval = '4h'
 cryptos_df = SHD.get_crypto_historical_data([cryptos[0]], interval, '2024-01-01')
 
 
-# In[5]:
+# In[7]:
 
 
+classifcation_model_path = "./../Experiments/Cryptos/models"
 list_of_models =['CNN_MultiHead_2D']
 
-checkpoint_filepath =f'models/model_{list_of_models[0]}_crypto_{cryptos[0]}_best'
+checkpoint_filepath =f'{classifcation_model_path}/model_{list_of_models[0]}_crypto_{cryptos[0]}_best'
 
 
-# In[6]:
+# In[8]:
 
 
 import json
@@ -72,14 +73,14 @@ for parameter in parameters:
     print(f'{parameter}:{parameters[parameter]}')
 
 
-# In[7]:
+# In[9]:
 
 
 features_indicators=parameters['features_indicators']
 features_indicators
 
 
-# In[8]:
+# In[10]:
 
 
 input_shape = (parameters['lookback'], len(features_indicators))
@@ -90,7 +91,7 @@ datatype='2D'
 trade=['Hold','Buy','Sell']
 
 
-# In[9]:
+# In[11]:
 
 
 dataGen_inference = FeaturesDataGenerator(
@@ -108,7 +109,7 @@ dataGen_inference = FeaturesDataGenerator(
 
 # ### Load the model
 
-# In[10]:
+# In[12]:
 
 
 from keras import backend as K
@@ -125,14 +126,14 @@ def matthews_correlation_coefficient(y_true, y_pred):
     return num / K.sqrt(den + K.epsilon())
 
 
-# In[11]:
+# In[14]:
 
 
 import tensorflow_addons as tfa
 trained_best_models={}
 for model_name in list_of_models:
     print(model_name)
-    checkpoint_filepath =f'models/model_{list_of_models[0]}_crypto_{cryptos[0]}_best'
+    checkpoint_filepath =f'{classifcation_model_path}/model_{list_of_models[0]}_crypto_{cryptos[0]}_best'
     trained_best_models[f'{model_name}']=tf.keras.models.load_model(
         checkpoint_filepath,
         custom_objects={'loss': weighted_categorical_crossentropy_loss, 'matthews_correlation_coefficient': matthews_correlation_coefficient})
@@ -140,31 +141,31 @@ for model_name in list_of_models:
 
 # ### Get the list of all used models
 
-# In[12]:
+# In[15]:
 
 
 list_of_models =['CNN_MultiHead_2D']
 
 
-# In[13]:
+# In[16]:
 
 
 parameters['symbol'][0]
 
 
-# In[14]:
+# In[17]:
 
 
 initial_balance = 100
 
 
-# In[25]:
+# In[19]:
 
 
 list_of_trained_models=[]
 for crypto in cryptos:
   for model_name in list_of_models:
-    checkpoint_filepath =f'models/model_{model_name}_crypto_{crypto}_best'
+    checkpoint_filepath =f'{classifcation_model_path}/model_{model_name}_crypto_{crypto}_best'
     with open(f'{checkpoint_filepath}/config.json', 'r') as file:
         parameters = json.load(file)
 
@@ -218,7 +219,7 @@ for crypto in cryptos:
 
 # ## Realtime Testing
 
-# In[16]:
+# In[20]:
 
 
 # Function to avoid redudant signals 
@@ -240,7 +241,7 @@ def generate_signals(signals):
     return trade_signals
 
 
-# In[17]:
+# In[21]:
 
 
 # Set the interval and data type for the simulation
@@ -255,7 +256,7 @@ balance = initial_balance
 fees = 0.002  # Set the transaction fee
 
 
-# In[18]:
+# In[22]:
 
 
 import pandas as pd
@@ -293,7 +294,7 @@ def save_recommendation(model_name=str, crypto=str, data=None, recommendation=No
         df.to_csv(file_path, mode='a', header=False, index=False)
 
 
-# In[19]:
+# In[23]:
 
 
 def check_and_execute(model=None, dataGen_inference=None, symbol='BTC', TH=[0.5, 0.5, 0.5], last_timestamp=pd.Timestamp('2022-01-01 00:00:00'), interval='4h', balance=100.0):
@@ -386,7 +387,7 @@ def check_and_execute(model=None, dataGen_inference=None, symbol='BTC', TH=[0.5,
     return label_pred, last_timestamp, balance
 
 
-# In[20]:
+# In[24]:
 
 
 list_of_trained_models
