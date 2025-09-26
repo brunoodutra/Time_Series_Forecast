@@ -43,12 +43,18 @@ def get_last_recommendation(model_name: str, crypto: str):
         print(f"An error occurred: {e}")
         return None
 # function to get a specific date and time recomendation
-def get_especific_recommendation(model_name: str, crypto: str, date: str, time: str):
+def get_especific_recommendation(model_name: str, crypto: str, date: str, time: str, profile: str = 'conservative'):
     file_path = f'./../AI/Classification/Real_Time_Inference/Recommendations/{model_name}_{crypto}_recommendation.csv'
     try:
         # Specify the delimiter (in this case, a comma)
         df = pd.read_csv(file_path, sep=',', header=0)
         specific_recommendation = df[(df['Date'] == date) & (df['Time'] == time)]
+
+        signal_gains = specific_recommendation['SignalGains'].apply(json.loads).iloc[0]
+        # Obtem os valores de target e stop loss para o perfil especificado
+        target = signal_gains[profile]['target']
+        stop_loss = signal_gains[profile]['stop_loss']
+
         if not specific_recommendation.empty:
             row = specific_recommendation.iloc[0]
             return {
@@ -57,6 +63,8 @@ def get_especific_recommendation(model_name: str, crypto: str, date: str, time: 
                 'recommendation': row['recommendation'],
                 'percentage': row['percentage'],
                 'Price': row['Price'],
+                'target': target,
+                'stop_loss': stop_loss
             }
         else:
             return None
@@ -141,6 +149,14 @@ async def last_recommendation_api(model_name: str, crypto: str):
     else:
         return {"error": "No recommendations found"}
 
+@app.get("/specific_recommendation")
+async def specific_recommendation_api(model_name: str, crypto: str, date: str, time: str, profile: str = 'conservative'):
+    specific_recommendation = get_especific_recommendation(model_name, crypto, date, time, profile)
+    if specific_recommendation is not None:
+        return specific_recommendation
+    else:
+        return {"error": "No recommendations found for the specified date and time"}    
+    
 # API to get the history 
 @app.get("/recommendation_history")
 async def last_recommendation_api(model_name: str, crypto: str, last_n: int = 500):
