@@ -6,7 +6,7 @@ Criar um painel web responsivo que exiba a última recomendação de investiment
 **Requisitos Específicos:**
 
 1.  **Layout:**
-    * Utilizar Tailwind CSS para o estilo visual, com um tema escuro similar ao exemplo fornecido (background #181e29, cards #23293a, cores de texto e destaque).
+    * Utilizar CSS para o estilo visual ao do tradnig view ou de sites de insvetimento
     * O layout deve ser responsivo, adaptando-se a diferentes tamanhos de tela (desktop e mobile).
     * Incluir um cabeçalho com o título "CryptoAdvisor" e uma breve descrição.
     * Organizar o conteúdo em seções bem definidas (Controles, Última Recomendação, Indicador Visual, Gráfico de Preço e Recomendações, Histórico de Recomendações, Rodapé).
@@ -15,9 +15,9 @@ Criar um painel web responsivo que exiba a última recomendação de investiment
     * Implementar dropdowns (`<select>`) para permitir a seleção de:
         * Modelo de análise (CNN, LSTM).
         * Criptomoeda (BTC, ETH, BNB).
-        * Intervalo de tempo para o gráfico (1h, 4h, 1d).
+        * Intervalo de tempo para o gráfico (1h, 4h, 1d), co 4h sendo o valor default.
         * Número de candles a exibir no gráfico (50, 100, 200, 500).
-    * Incluir um botão "Atualizar" que aciona a busca e atualização dos dados.
+    * Incluir um botão "Atualizar" que aciona a busca e atualização dos dados, contudo a cada 5 minutod o gráfico deve atualizar o status do candle e etc...
 
 3.  **Visualização da Última Recomendação:**
     * Exibir a data e hora da última recomendação.
@@ -30,13 +30,15 @@ Criar um painel web responsivo que exiba a última recomendação de investiment
     * Integrar marcadores visuais no gráfico para indicar os momentos das recomendações de Compra e Venda do histórico. A última recomendação deve ter um marcador diferenciado.
     * Incluir controles de zoom (in, out, reset) para o gráfico.
     * Incluir régua para identificar a porcentagem de um ponto ao outro entre candles
+    * Incluir ferramentas de gráficos como fibonacci e demais usadas para análise de gráficos
+    * Incluir opção de ver médias, RSI, volume etc.. 
 
 5.  **Histórico de Recomendações:**
     * Exibir uma tabela com o histórico de recomendações, incluindo data, hora, recomendação e preço.
     * A tabela deve ser scrollável horizontalmente em telas menores.
 
-6.  **Acesso a APIs (Simulação):**
-    * Simular a comunicação com um backend para obter os dados:
+6.  **Acesso a APIs:**
+    * Comunicação com um backend para obter os dados:
 	Obtenção das recomendações:
         * `http://127.0.0.1:8000/last_recommendation?model_name=[MODELO]&crypto=[CRIPTOMOEDA]` (retorna um JSON com `Date`, `Time`, `recommendation`, `Price`).
         * `http://127.0.0.1:8000/recommendation_history?model_name=[MODELO]&crypto=[CRIPTOMOEDA]`;` (retorna um array de JSONs com `Date`, `Time`, `recommendation`, `Price`).

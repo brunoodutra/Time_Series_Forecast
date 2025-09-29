@@ -6,11 +6,12 @@ To start using the classification model, you need to set up the development envi
 
 1. Clone the repository to your local computer.
 2. Navigate to the root directory of the project in the terminal or command prompt.
-3. Run the command `API_setup:app --reload` to start the development server.
+3. Run the command `uvicorn API_setup:app --reload --host 0.0.0.0` to start the development server.
+
 
 **Command:**
 ```bash
-API_setup:app --reload
+uvicorn API_setup:app --reload --host 0.0.0.0
 ```
 This command will start the development server with the auto-reload option, allowing you to see changes made to the code without having to restart the server manually.
 

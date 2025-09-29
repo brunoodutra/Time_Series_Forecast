@@ -4,6 +4,8 @@
 csv
 *.h5
 *.pb
+*.txt
+*.bat
 models/
 venv
 .venv
@@ -12,3 +14,6 @@ acoes/_pycache_/
 *.pdf
 
 **/__pycache__
+
+# Ignora tudo dentro de App_site
+finance/App_site/*
