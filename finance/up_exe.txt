@@ -1,3 +1,4 @@
+REM Info: versão executável salva na pasta anterior: ..\up_exe.bat
 @echo off
 set "ROOT=D:\Projetos_python"
 set "VENV=%ROOT%\.venv\Scripts\Activate.ps1"
