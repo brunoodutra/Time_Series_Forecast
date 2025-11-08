@@ -5,7 +5,24 @@ set "VENV=%ROOT%\.venv\Scripts\Activate.ps1"
 
 echo Abrindo 3 abas no Windows Terminal com venv ativada e programas rodando...
 
+REM Verifica se o Windows Terminal (wt) está disponível; caso contrário, usa PowerShell windows
+where wt >nul 2>&1
+if errorlevel 1 goto no_wt
+
 wt -w 0 ^
   new-tab -d "%ROOT%" powershell -NoExit -Command "Set-ExecutionPolicy -Scope Process Bypass; if (Test-Path $env:VENV) { . $env:VENV } else { Write-Host '[AVISO] VENV nao encontrado:' $env:VENV }; Set-Location -Path '%ROOT%\Time_Series_Forecast\finance\AI\Classification\Real_Time_Inference'; $f='classification_in_produtction.py'; if (-not (Test-Path $f)) { $f='classification_in_production.py' }; Write-Host '[INFO] Executando:' $f; python $f" ^
   ; new-tab -d "%ROOT%" powershell -NoExit -Command "Set-ExecutionPolicy -Scope Process Bypass; if (Test-Path $env:VENV) { . $env:VENV } else { Write-Host '[AVISO] VENV nao encontrado:' $env:VENV }; Set-Location -Path '%ROOT%\Time_Series_Forecast\finance\API'; Write-Host '[INFO] Subindo API...'; python -m uvicorn API_setup:app --host 0.0.0.0 --port 8000 --use-colors" ^
   ; new-tab -d "%ROOT%" powershell -NoExit -Command "Set-ExecutionPolicy -Scope Process Bypass; if (Test-Path $env:VENV) { . $env:VENV } else { Write-Host '[AVISO] VENV nao encontrado:' $env:VENV }; if (Test-Path '%ROOT%\cryptodashpro\cryptodash-pro') { Set-Location -Path '%ROOT%\cryptodashpro\cryptodash-pro' } else { Set-Location -Path '%ROOT%\Time_Series_Forecast\finance\App_site\dashboard' }; Write-Host '[INFO] Servindo pasta' (Get-Location) 'em http://localhost:8005'; python -m http.server 8005"
+
+goto end
+
+:no_wt
+echo [AVISO] Windows Terminal (wt) nao encontrado no PATH. Abrindo 3 janelas PowerShell...
+start "Classificacao" powershell -NoExit -Command "Set-ExecutionPolicy -Scope Process Bypass; if (Test-Path $env:VENV) { . $env:VENV } else { Write-Host '[AVISO] VENV nao encontrado:' $env:VENV }; Set-Location -Path '%ROOT%\Time_Series_Forecast\finance\AI\Classification\Real_Time_Inference'; $f='classification_in_produtction.py'; if (-not (Test-Path $f)) { $f='classification_in_production.py' }; Write-Host '[INFO] Executando:' $f; python $f"
+start "API" powershell -NoExit -Command "Set-ExecutionPolicy -Scope Process Bypass; if (Test-Path $env:VENV) { . $env:VENV } else { Write-Host '[AVISO] VENV nao encontrado:' $env:VENV }; Set-Location -Path '%ROOT%\Time_Series_Forecast\finance\API'; Write-Host '[INFO] Subindo API...'; python -m uvicorn API_setup:app --host 0.0.0.0 --port 8000 --use-colors"
+start "Dashboard" powershell -NoExit -Command "Set-ExecutionPolicy -Scope Process Bypass; if (Test-Path $env:VENV) { . $env:VENV } else { Write-Host '[AVISO] VENV nao encontrado:' $env:VENV }; if (Test-Path '%ROOT%\cryptodashpro\cryptodash-pro') { Set-Location -Path '%ROOT%\cryptodashpro\cryptodash-pro' } else { Set-Location -Path '%ROOT%\Time_Series_Forecast\finance\App_site\dashboard' }; Write-Host '[INFO] Servindo pasta' (Get-Location) 'em http://localhost:8005'; python -m http.server 8005"
+
+:end
+echo.
+echo Pressione qualquer tecla para sair...
+pause >nul
