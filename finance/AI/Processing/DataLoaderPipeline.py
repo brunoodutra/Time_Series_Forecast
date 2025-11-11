@@ -157,22 +157,17 @@ class FeaturesDataGenerator(ComputIndicators, DatasetProcessing, CustomTrainLoss
             processing: Optional data processing function.
             selected_features (list): List of features to compute. If None, compute all features.
         """
-        if  isinstance(X_df, pd.DataFrame): 
-            X_data = X_df
-        else :
-            X_df = pd.DataFrame(data=np.ones([20,6]),columns=['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume'])
-            X_data = X_df
-
-        self.X_df = X_df
-        self.InputData = X_data
+        
+        #self.InputData = X_df
         self.lookback = lookback
         self.pred_days= pred_days
-        self.inputShape = X_data.shape
+        #self.inputShape = X_data.shape
         #self.outputShape = dataset_generator.__getitem__(0)[1].shape
         self.processing = processing
         self.axis = axis
         self.selected_features = selected_features
         self.data_augmentation = data_augmentation
+        self.min_max_norm_features =  min_max_norm_features
         self.min_norm=min_max_norm_features[0]
         self.max_norm=min_max_norm_features[1]
         self.min_max_regression_targets=min_max_regression_targets
@@ -181,45 +176,72 @@ class FeaturesDataGenerator(ComputIndicators, DatasetProcessing, CustomTrainLoss
         self.predict_type = predict_type
         #self.y_classification = self.comput_outputs(self.features[:,lookback-1])
         #self.y_classification = self.comput_outputs(self.InputData['Close'], days_lookback = self.pred_days)
-        self.y_classification = self.label_data(close_prices=self.InputData['Close'].values, 
-                                                window=self.pred_days, 
-                                                positive_threshold=buy_sell_threshold[0], 
-                                                negative_threshold=buy_sell_threshold[1])[self.lookback:]
-        print('self.pred_days', self.pred_days)
-        self.features = self.comput_features(np.squeeze(self.InputData), pred_days = self.pred_days)
+        if  isinstance(X_df, pd.DataFrame):
+            X_df=[X_df]
+        elif X_df == [] or X_df==None:
+            X_df=[None]
 
-        self.window_close_values =  self.windowing(self.InputData['Close'].values.astype(np.float32), lookback = 1, pred_days = 0)[lookback-1:]
 
-        if self.data_augmentation == True:
+        self.features = []
+        self.y_classification = []
+        self.y_regression = []
+        for X_data in X_df:
+
+            if  isinstance(X_data, pd.DataFrame): 
+                InputData = X_data
+            else :
+                X_df = pd.DataFrame(data=np.ones([20,6]),columns=['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume'])
+                InputData = X_df
+
+            y_classification = self.label_data(close_prices=InputData['Close'].values, 
+                                                    window=self.pred_days, 
+                                                    positive_threshold=buy_sell_threshold[0], 
+                                                    negative_threshold=buy_sell_threshold[1])[self.lookback:]
+            #print('self.pred_days', self.pred_days)
+            features = self.comput_features(np.squeeze(InputData), pred_days = self.pred_days)
+
+            self.window_close_values =  self.windowing(InputData['Close'].values.astype(np.float32), lookback = 1, pred_days = 0)[lookback-1:]
+
+            if self.data_augmentation == True:
+                
+                #APPLIED OVER SAMPLER 
+                    # over sample repeating the historical data 
+                Y_train_categorical=np.argmax(y_classification, axis=1)
+                classes, counts = np.unique(Y_train_categorical, return_counts=True)
+
+                max_class = classes[np.argmax(counts)]
+                max_count = np.max(counts)
+                
+                #using 60% of desbalance
+                desired_count = int(0.60 * max_count) #int(0.60 * max_count)
+
+                # get the classes counts
+                target_class_counts = {i: desired_count if i != max_class else max_count for i in classes}
+
+                features, y_classification, stock_idx = self.augment_data(features, y_classification, [max_count, int(max_count*0.6), int(max_count*0.6)])
+
+                self.window_close_values=self.window_close_values[stock_idx]
             
-            #APPLIED OVER SAMPLER 
-                # over sample repeating the historical data 
-            Y_train_categorical=np.argmax(self.y_classification, axis=1)
-            classes, counts = np.unique(Y_train_categorical, return_counts=True)
 
-            max_class = classes[np.argmax(counts)]
-            max_count = np.max(counts)
+            if self.min_max_regression_targets == None:
+                self.target_min = np.min(self.window_close_values)
+                self.target_max = np.max(self.window_close_values)
+            else:
+                self.target_min = self.min_max_regression_targets[0]
+                self.target_max = self.min_max_regression_targets[1]
+
+            #TODO: verify if it make senses
+            #y_regression = self.normalize_regression(self.window_close_values, self.target_min, self.target_max)
+            y_regression = self.window_close_values
             
-            #using 60% of desbalance
-            desired_count = int(0.60 * max_count) #int(0.60 * max_count)
-
-            # get the classes counts
-            target_class_counts = {i: desired_count if i != max_class else max_count for i in classes}
-
-            self.features, self.y_classification, stock_idx = self.augment_data(self.features, self.y_classification, [max_count, int(max_count*0.6), int(max_count*0.6)])
-
-            self.window_close_values=self.window_close_values[stock_idx]
+            self.features += [features]
+            self.y_classification += [y_classification]
+            self.y_regression += [y_regression]
         
+        self.features = np.vstack(self.features)
+        self.y_classification =  np.vstack(self.y_classification)
+        self.y_regression = np.vstack(self.y_regression)
 
-        if self.min_max_regression_targets == None:
-            self.target_min = np.min(self.window_close_values)
-            self.target_max = np.max(self.window_close_values)
-        else:
-            self.target_min = self.min_max_regression_targets[0]
-            self.target_max = self.min_max_regression_targets[1]
-
-        self.norm_targets = self.normalize_regression(self.window_close_values, self.target_min, self.target_max)
-        
         self.inputShape  = self.features.shape
         self.output_shape=self.y_classification[0].shape
 
@@ -591,39 +613,42 @@ class FeaturesDataGenerator(ComputIndicators, DatasetProcessing, CustomTrainLoss
         y_regression = np.zeros([self.batchSize,1])
 
         #features = np.zeros([self.batchSize, self.features_length])
-        features = np.zeros([self.batchSize, self.lookback, self.features_length])   
+        features_norm = np.zeros([self.batchSize, self.lookback, self.features_length])  
+        features = np.zeros([self.batchSize, self.lookback, self.features_length])    
         for i, j in enumerate(batch_indices):
             
             #apply norm minmax for each bacth data 
-            features[i,:,:] = np.nan_to_num(self.norm_minmax(self.features[j], axis=0, minimum=self.min_norm, maximum=self.max_norm))
+            features_norm[i,:,:] = np.nan_to_num(self.norm_minmax(self.features[j].copy(), axis=0, minimum=self.min_norm, maximum=self.max_norm))
 
-            if np.isinf(features[i,:,:]).any():
+            if np.isinf(features_norm[i,:,:]).any():
                 raise ValueError(f"Valor infinito encontrado na feature {j}. idx: {j}, Valor: {self.features[j]}")
 
-            if np.isnan(features[i,:,:]).any():
+            if np.isnan(features_norm[i,:,:]).any():
                 raise ValueError(f"Valor NaN encontrado na feature {j}. idx: {j}, Valor: {self.features[j]}")
-            #features[i,:,:] = self.features[j]
             
-            y_regression[i,:] = self.norm_targets[j]  # Usa o valor normalizado
+            features[i,:,:] = self.features[j].copy()
+            
+            y_regression[i,:] = self.y_regression[j]  # Use the normalized value 
     
 
             y_class[i,:] = self.y_classification[j]
         
         if self.datatype == '2D':
             # Transformar para formato 2D
-            features = np.transpose(features, [0, 2, 1]).reshape(-1, 1, self.features_length, self.lookback)
+            features_norm = np.transpose(features_norm, [0, 2, 1]).reshape(-1, self.lookback, self.features_length, 1)
 
         # Convertendo features e y para tensores do TensorFlow
         features = tf.convert_to_tensor(features, dtype=tf.float32)
+        features_norm = tf.convert_to_tensor(features_norm, dtype=tf.float32)
         y_class = tf.convert_to_tensor(y_class, dtype=tf.float32)
         y_regression = tf.convert_to_tensor(y_regression, dtype=tf.float32)
 
         if self.predict_type =="classification":
-            return features, y_class
-        elif self.predict_type =="regrtession":
+            return features_norm, y_class
+        elif self.predict_type =="regression":
             return features, y_regression
         elif self.predict_type =="both":
-            return features, [y_regression,y_class]
+            return features_norm, [y_regression,y_class]
     
     def bat_data(self,x_data):
         x_data= (x_data - np.min(x_data)) / (np.max(x_data) - np.min(x_data))
