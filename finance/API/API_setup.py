@@ -165,7 +165,12 @@ async def last_recommendation_api(model_name: str, crypto: str, last_n: int = 50
         return history 
     else:
         return {"error": "No recommendations found"}
-        
+
+@app.get("/sentiment_analysis")
+async def sentiment_analysis(crypto: str):
+    return {"Sentiment": "middle",
+            "Top_news": ['A', "B", "C", "D", "E"]}   # positive, negative, middle 
+    
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
