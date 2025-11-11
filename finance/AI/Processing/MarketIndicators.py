@@ -359,3 +359,103 @@ class ComputIndicators():
             lowest_low = np.min(low_prices[i-window_length:i])
             wr[i] = ((highest_high - close_prices[i]) / (highest_high - lowest_low + self._lambda)) * -100
         return wr 
+    
+    ### indicators used for target and stops
+
+
+
+class ComputSignalGains():
+
+    def fibonacci_levels(self, low_price, high_price, current_price):
+        """
+        Calculate the Fibonacci retracement and extension levels from the lowest and highest prices.
+
+        Parameters:
+        low_price (float): The lowest price of the movement.
+        high_price (float): The highest price of the movement.
+        current_price (float): The current price.
+
+        Returns:
+        dict: A dictionary containing the Fibonacci retracement and extension levels.
+        """
+        diff = high_price - low_price
+
+        retracement_levels = {
+            '23.6%': high_price - (0.236 * diff),
+            '38.2%': high_price - (0.382 * diff),
+            '50%': high_price - (0.5 * diff),
+            '61.8%': high_price - (0.618 * diff),
+        }
+
+        #extension_levels = {
+        #    '100%': current_price + diff,
+        #    '131.8%': current_price + (1.318 * diff),
+        #    '161.8%': current_price + (1.618 * diff),
+        #    '261.8%': current_price + (2.618 * diff),
+        #}
+
+        extension_levels = {
+            '50%': current_price + (0.50 * diff),
+            '61.8%': current_price + (0.618 * diff),
+            '78.6%': current_price + (0.786 * diff),
+            '100%': current_price + diff,
+            '131.8%': current_price + (1.318 * diff),
+            '161.8%': current_price + (1.618 * diff),
+            '261.8%': current_price + (2.618 * diff),
+        }
+
+        return {
+            'retracement': retracement_levels,
+            'extension': extension_levels
+        }
+    
+    def calculate_Gains_Fibonacci(self, current_price, low_price, high_price, side='buy'):
+        """
+        Define profit targets and stop losses based on Fibonacci levels and risk profiles.
+
+        Parameters:
+        current_price (float): The current price.
+        low_price (float): The lowest price of the movement.
+        high_price (float): The highest price of the movement.
+        side (str): 'buy' or 'sell' to indicate the trade direction.
+
+        Returns:
+        dict: A dictionary with targets and stops per risk profile.
+        """
+        fibonacci = self.fibonacci_levels(low_price, high_price, current_price)
+
+        if side.lower() == 'buy':
+            return {
+                'conservative': {
+                    'target': round(fibonacci['extension']['50%'], 4),
+                    'stop_loss': round(current_price - (2 * current_price * 0.01), 4)
+                },
+                'moderate': {
+                    'target': round(fibonacci['extension']['61.8%'], 4),
+                    'stop_loss': round(fibonacci['retracement']['50%'] * 0.995, 4)
+                },
+                'aggressive': {
+                    'target': round(fibonacci['extension']['100%'], 4),
+                    'stop_loss': round(fibonacci['retracement']['61.8%'] * 0.995, 4)
+                }
+            }
+
+        elif side.lower() == 'sell':
+            return {
+                'conservative': {
+                    'target': round(fibonacci['retracement']['61.8%'], 4),
+                    'stop_loss': round(fibonacci['extension']['100%'] * 1.005, 4)
+                },
+                'moderate': {
+                    'target': round(fibonacci['retracement']['50%'], 4),
+                    'stop_loss': round(fibonacci['extension']['131.8%'] * 1.005, 4)
+                },
+                'aggressive': {
+                    'target': round(fibonacci['retracement']['38.2%'], 4),
+                    'stop_loss': round(current_price + (2 * current_price * 0.01), 4)
+                }
+            }
+
+        else:
+            raise ValueError("Invalid side. Use 'buy' or 'sell'.")
+
