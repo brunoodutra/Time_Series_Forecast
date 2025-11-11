@@ -15,4 +15,4 @@ echo Abrindo 3 abas no Windows Terminal com venv ativada...
 wt -w 0 ^
   new-tab -d "%INFER%" powershell -ExecutionPolicy Bypass -NoExit -Command "if (Test-Path '%VENV_PS1%') { . '%VENV_PS1%' } elseif (Test-Path '%VENV_ACT%') { . '%VENV_ACT%' } & python .\classification_in_produtction.py" ^
   ; new-tab -d "%API%" powershell -ExecutionPolicy Bypass -NoExit -Command "if (Test-Path '%VENV_PS1%') { . '%VENV_PS1%' } elseif (Test-Path '%VENV_ACT%') { . '%VENV_ACT%' } & uvicorn API_setup:app --reload --host 0.0.0.0" ^
-  ; new-tab -d "%DASH%" powershell -ExecutionPolicy Bypass -NoExit -Command "python -m http.server 8005"
+  ; new-tab -d "%DASH%" powershell -ExecutionPolicy Bypass -NoExit -Command "npx http-server -p 8005 -c-1"
