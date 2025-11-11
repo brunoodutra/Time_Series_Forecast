@@ -23,7 +23,7 @@ from pydantic import BaseModel
 import joblib
 
 
-# In[3]:
+# In[ ]:
 
 
 import os, sys
@@ -33,17 +33,21 @@ if(processing_source_path not in sys.path):
 from DataLoaderPipeline import FeaturesDataGenerator, scrapingHistoricalData
 #from MarketDataCollector import scrapingHistoricalData
 
+from MarketIndicators import ComputSignalGains
+
+CSG=ComputSignalGains()
+
 
 # ## Configuring the data parameters and adapters
 
-# In[4]:
+# In[ ]:
 
 
 SHD=scrapingHistoricalData()
 
 # Lista de criptomoedas
-cryptos = ['BTC','ETH']
-last_timestamp = pd.Timestamp('2020-02-05 16:00:00')
+cryptos = ['BTC', 'ETH', 'ADA', 'SOL','XRP']
+
 
 # Escolha o intervalo
 interval = '4h'
@@ -51,17 +55,19 @@ interval = '4h'
 # Obtenha os dados históricos
 cryptos_df = SHD.get_crypto_historical_data([cryptos[0]], interval, '2024-01-01')
 
+last_timestamp = cryptos_df.loc[len(cryptos_df)-2,'Date']
 
-# In[7]:
+
+# In[5]:
 
 
 classifcation_model_path = "./../Experiments/Cryptos/models"
 list_of_models =['CNN_MultiHead_2D']
+sufix ='last'
+checkpoint_filepath =f'{classifcation_model_path}/model_{list_of_models[0]}_crypto_{cryptos[0]}_{sufix}'
 
-checkpoint_filepath =f'{classifcation_model_path}/model_{list_of_models[0]}_crypto_{cryptos[0]}_best'
 
-
-# In[8]:
+# In[6]:
 
 
 import json
@@ -73,14 +79,14 @@ for parameter in parameters:
     print(f'{parameter}:{parameters[parameter]}')
 
 
-# In[9]:
+# In[7]:
 
 
 features_indicators=parameters['features_indicators']
 features_indicators
 
 
-# In[10]:
+# In[8]:
 
 
 input_shape = (parameters['lookback'], len(features_indicators))
@@ -91,7 +97,7 @@ datatype='2D'
 trade=['Hold','Buy','Sell']
 
 
-# In[11]:
+# In[9]:
 
 
 dataGen_inference = FeaturesDataGenerator(
@@ -109,7 +115,7 @@ dataGen_inference = FeaturesDataGenerator(
 
 # ### Load the model
 
-# In[12]:
+# In[10]:
 
 
 from keras import backend as K
@@ -126,14 +132,14 @@ def matthews_correlation_coefficient(y_true, y_pred):
     return num / K.sqrt(den + K.epsilon())
 
 
-# In[14]:
+# In[11]:
 
 
 import tensorflow_addons as tfa
 trained_best_models={}
 for model_name in list_of_models:
     print(model_name)
-    checkpoint_filepath =f'{classifcation_model_path}/model_{list_of_models[0]}_crypto_{cryptos[0]}_best'
+    checkpoint_filepath =f'{classifcation_model_path}/model_{model_name}_crypto_{cryptos[0]}_{sufix}'
     trained_best_models[f'{model_name}']=tf.keras.models.load_model(
         checkpoint_filepath,
         custom_objects={'loss': weighted_categorical_crossentropy_loss, 'matthews_correlation_coefficient': matthews_correlation_coefficient})
@@ -141,31 +147,51 @@ for model_name in list_of_models:
 
 # ### Get the list of all used models
 
-# In[15]:
+# In[12]:
 
 
 list_of_models =['CNN_MultiHead_2D']
 
 
-# In[16]:
+# In[13]:
 
 
 parameters['symbol'][0]
 
 
-# In[17]:
+# In[14]:
 
 
 initial_balance = 100
 
 
-# In[19]:
+# In[15]:
+
+
+classifcation_model_path
+
+
+# In[22]:
+
+
+cryptos
+
+
+# In[ ]:
 
 
 list_of_trained_models=[]
+
 for crypto in cryptos:
   for model_name in list_of_models:
-    checkpoint_filepath =f'{classifcation_model_path}/model_{model_name}_crypto_{crypto}_best'
+    
+    checkpoint_filepath =f'{classifcation_model_path}/model_{model_name}_crypto_{crypto}_{sufix}'
+    mode= 'unique'
+
+    if os.path.exists(checkpoint_filepath) == False:
+       checkpoint_filepath =f'{classifcation_model_path}/model_CNN_restnet_MultiHead_2D_crypto_General_{sufix}'
+       mode= 'general'
+       
     with open(f'{checkpoint_filepath}/config.json', 'r') as file:
         parameters = json.load(file)
 
@@ -194,8 +220,9 @@ for crypto in cryptos:
     
     list_of_trained_models.append({
       "model_name": model_name,
+      "mode":mode,
       "configurations": {
-          "crypto": parameters['symbol'][0],
+          "crypto": crypto,
           "dataGen_inference":dataGen_inference,
           "trained_model": trained_model,
           "time_operation": interval
@@ -217,9 +244,21 @@ for crypto in cryptos:
     )
 
 
+# In[31]:
+
+
+list_of_trained_models[2]
+
+
+# In[24]:
+
+
+list_of_trained_models[2]
+
+
 # ## Realtime Testing
 
-# In[20]:
+# In[ ]:
 
 
 # Function to avoid redudant signals 
@@ -241,7 +280,7 @@ def generate_signals(signals):
     return trade_signals
 
 
-# In[21]:
+# In[ ]:
 
 
 # Set the interval and data type for the simulation
@@ -256,15 +295,15 @@ balance = initial_balance
 fees = 0.002  # Set the transaction fee
 
 
-# In[22]:
+# In[ ]:
 
 
 import pandas as pd
 import os
 
-def save_recommendation(model_name=str, crypto=str, data=None, recommendation=None, outuput_percentage=None, timestamp=None):
+def save_recommendation(model_name=str, crypto=str, data=None, recommendation=None, outuput_percentage=None, timestamp=None, SignalGains=None):
     # Define the column names
-    columns = ['Date', 'Time', 'recommendation', 'percentage','Price', 'Position', 'Quantity']
+    columns = ['Date', 'Time', 'recommendation', 'percentage','Price', 'SignalGains','Position', 'Quantity']
 
     # Get the current timestamp
     if timestamp is None:
@@ -279,6 +318,11 @@ def save_recommendation(model_name=str, crypto=str, data=None, recommendation=No
         'percentage' : outuput_percentage,
         'Price': data.loc[len(data)-1, 'Close'],  # Assuming data is a pandas DataFrame
     }
+    
+    # Add SignalGains to result dictionary if it exists
+    if SignalGains is not None:
+        result['SignalGains'] = json.dumps(SignalGains)
+
 
     # Create the file path
     file_path = f'Recommendations/{model_name}_{crypto}_recommendation.csv'
@@ -294,7 +338,7 @@ def save_recommendation(model_name=str, crypto=str, data=None, recommendation=No
         df.to_csv(file_path, mode='a', header=False, index=False)
 
 
-# In[23]:
+# In[ ]:
 
 
 def check_and_execute(model=None, dataGen_inference=None, symbol='BTC', TH=[0.5, 0.5, 0.5], last_timestamp=pd.Timestamp('2022-01-01 00:00:00'), interval='4h', balance=100.0):
@@ -320,24 +364,25 @@ def check_and_execute(model=None, dataGen_inference=None, symbol='BTC', TH=[0.5,
     today = datetime.today()
     
     # Collect historical data for the last 60 days
+    #TODO change this used time day to a lookback
     window_days = today - timedelta(days=60)
     start_time = window_days.strftime('%Y-%m-%d')
-    data = SHD.get_crypto_historical_data([symbol], interval, start_time)
-    current_timestamp = data.loc[len(data)-1,'Date']
+    data_df = SHD.get_crypto_historical_data([symbol], interval, start_time)
+    current_timestamp = data_df.loc[len(data_df)-1,'Date']
     
    
     # Generate features for inference
-    x_data_inference = dataGen_inference.comput_features(data, pred_days=0)
+    x_data_inference = dataGen_inference.comput_features(data_df, pred_days=0)
     x_data = dataGen_inference.apply_NomrMinmax(x_data_inference, min_norm, max_norm, axis=0)
     
     # Reshape the data for 2D input
     if datatype == '2D':
-        x_data = np.transpose(x_data, [0, 2, 1]).reshape(-1, 1, dataGen_inference.inputShape[2], dataGen_inference.inputShape[1])
-    
+        x_data = np.transpose(x_data, [0, 2, 1]).reshape(-1, dataGen_inference.inputShape[1], dataGen_inference.inputShape[2], 1)
+        
     # Use the trained model and make predictions
     label_pred = model.predict(x_data)
     
-    # Generate trade signals based on the predictions
+    # Generate trade signalvs based on the predictions
     trade_signals = np.array([
         trade[np.argmax(prediction)] if np.max(prediction) > TH[np.argmax(prediction)] else trade[0]
         for prediction in label_pred
@@ -346,32 +391,50 @@ def check_and_execute(model=None, dataGen_inference=None, symbol='BTC', TH=[0.5,
     percentage_signals = np.max(label_pred, axis=1)
 
     # Generate signals
-    trade_signals = generate_signals(trade_signals)
+    #trade_signals = generate_signals(trade_signals)
     
     # Print the suggested trades and timestamp
     print(f'Suggested trade of {symbol}: {trade_signals[-2:]} >> Timestamp: {current_timestamp}')
     print("------------------------------------------------------------------------------------")
+
     #save_recommendation(model_name="CNN", crypto=symbol[0], data=data, recommendation=trade_signals[-2], outuput_percentage=percentage_signals[-2], timestamp=last_timestamp)
 
+    TradeGains = None
     # Check for new trade opportunities
     if last_timestamp != current_timestamp:
         # Check if it's a buy or sell signal
         if trade_signals[-2] != "Hold":
+
+            # comput the stop gain and targets profit
+            #-----------------------------------------------------------
+            last_recomendation_window = data_df.iloc[-dataGen_inference.lookback:]
+
+            high_price = last_recomendation_window['Close'].max()
+            low_price = last_recomendation_window['Close'].min()
+            input_price = last_recomendation_window['Close'].iloc[-1]
+            #-----------------------------------------------------------
+
             # Check if it's a buy signal
             if trade_signals[-2] == "Buy":
+
+                TradeGains = CSG.calculate_Gains_Fibonacci(input_price, low_price, high_price, side=trade_signals[-2])
+
                 # Buy the cryptocurrency
                 if balance > 0:  # Only buy if there's a balance
-                    price = data.loc[len(data)-1, 'Close']
+                    price = data_df.loc[len(data_df)-1, 'Close']
                     position_value = (balance * (1 - fees)) / price  # Calculate the position value
                     balance = 0  # Zero out the balance
                     positions.append((current_timestamp, price, position_value))
                     print(f'Bought at {current_timestamp} for {price} with {position_value} coins')
             # Check if it's a sell signal
             elif trade_signals[-2] == "Sell":
+
+                TradeGains = CSG.calculate_Gains_Fibonacci(input_price, high_price, low_price, side=trade_signals[-2])
+
                 # Sell the cryptocurrency
                 if positions:  # Only sell if there are positions
                     position = positions.pop(0)
-                    price = data.loc[len(data)-1, 'Close']
+                    price = data_df.loc[len(data_df)-1, 'Close']
                     balance = position[2] * price * (1 - fees)  # Calculate the new balance
                     profit = balance - initial_balance
                     position_value = 0  # Zero out the position value
@@ -380,17 +443,12 @@ def check_and_execute(model=None, dataGen_inference=None, symbol='BTC', TH=[0.5,
                     print(f'No positions to sell at {current_timestamp}')
         
         # save the recommendations
-        save_recommendation(model_name="CNN", crypto=symbol, data=data, recommendation=trade_signals[-2], outuput_percentage=percentage_signals[-2], timestamp=last_timestamp)
+        save_recommendation(model_name="CNN", crypto=symbol, data=data_df, recommendation=trade_signals[-2], 
+                            outuput_percentage=percentage_signals[-2], timestamp=last_timestamp, SignalGains = TradeGains)
         # Update the last timestamp and balance
         last_timestamp = current_timestamp
         
     return label_pred, last_timestamp, balance
-
-
-# In[24]:
-
-
-list_of_trained_models
 
 
 # In[ ]:
@@ -401,6 +459,7 @@ while True:
     try:
         for idx, trained_model_json in enumerate(list_of_trained_models):
             model_name=trained_model_json['model_name']
+            mode=trained_model_json['mode']
             classification_model=trained_model_json['configurations']['trained_model']
             dataGen_inference = trained_model_json['configurations']['dataGen_inference']
             symbol=trained_model_json['configurations']['crypto']
@@ -421,3 +480,7 @@ while True:
     # Wait for 20 minutes (1200 seconds) before checking again
     time.sleep(1200)
 
+
+# to converto to .py files use this comand:
+# 
+# jupyter nbconvert --to python .\classification_in_produtction.ipynb
