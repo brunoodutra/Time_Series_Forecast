@@ -20,14 +20,18 @@ import importlib
 
 
 def _attach_processing_path() -> None:
-    """Adiciona o diretório `finance/Processing` ao sys.path para permitir importações internas."""
-    processing_source_path = os.path.abspath('../../../Processing')
+    """Adiciona o diretório `finance/Processing` ao sys.path baseado no caminho do arquivo."""
+    here = Path(__file__).resolve()
+    finance_root = here.parents[3]  # .../finance
+    processing_source_path = str(finance_root / 'Processing')
     if processing_source_path not in sys.path:
         sys.path.append(processing_source_path)
 
 def _attach_quant_functions_path() -> None:
     """Adiciona o diretório `Quantization/functions` ao sys.path para usar Embedded_Model."""
-    quant_funcs_path = os.path.abspath('../Quantization/functions')
+    here = Path(__file__).resolve()
+    classification_root = here.parents[1]  # .../Classification
+    quant_funcs_path = str(classification_root / 'Quantization' / 'functions')
     if quant_funcs_path not in sys.path:
         sys.path.append(quant_funcs_path)
 
