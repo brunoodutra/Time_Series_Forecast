@@ -13,6 +13,8 @@ import tensorflow as tf
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
+import os
+from pathlib import Path
 
 
 # In[2]:
@@ -36,6 +38,120 @@ from DataLoaderPipeline import FeaturesDataGenerator, scrapingHistoricalData
 from MarketIndicators import ComputSignalGains
 
 CSG=ComputSignalGains()
+
+# -----------------------------------------------------------------------------
+# TFLite Support (Optional)
+# -----------------------------------------------------------------------------
+# MODEL_BACKEND: 'keras' (default) or 'tflite'. You can override via env var.
+MODEL_BACKEND = os.getenv('MODEL_BACKEND', 'keras').lower()
+TFLITE_MODEL_PATH = os.getenv('TFLITE_MODEL_PATH', '')
+TFLITE_MODEL_DIR = os.getenv('TFLITE_MODEL_DIR', '')
+
+class TFLiteModel:
+    """
+    Wrapper para executar inferência com modelos TFLite, suportando float32, fp16 e int8.
+
+    - Converte entrada para o dtype esperado pelo modelo.
+    - Para int8, aplica quantização usando (x/scale + zero_point).
+    - Para saída int8, aplica dequantização usando (y - zero_point) * scale.
+    """
+    def __init__(self, tflite_path: Path):
+        self.tflite_path = Path(tflite_path)
+        self.interpreter = tf.lite.Interpreter(model_path=str(self.tflite_path))
+        self.interpreter.allocate_tensors()
+        self.input_details = self.interpreter.get_input_details()
+        self.output_details = self.interpreter.get_output_details()
+
+        # Handle quantization metadata
+        self.input_scale, self.input_zero_point = self.input_details[0].get('quantization', (0.0, 0))
+        self.output_scale, self.output_zero_point = self.output_details[0].get('quantization', (0.0, 0))
+        self.input_index = self.input_details[0]['index']
+        self.output_index = self.output_details[0]['index']
+        self.input_dtype = self.input_details[0]['dtype']
+        self.output_dtype = self.output_details[0]['dtype']
+        self.input_shape = self.input_details[0]['shape']
+
+    def _ensure_shape(self, x: np.ndarray) -> None:
+        """Redimensiona o tensor de entrada quando o batch/shape diverge do esperado."""
+        if tuple(x.shape) != tuple(self.input_shape):
+            self.interpreter.resize_tensor_input(self.input_index, x.shape)
+            self.interpreter.allocate_tensors()
+            # Atualiza detalhes após realocação
+            self.input_details = self.interpreter.get_input_details()
+            self.output_details = self.interpreter.get_output_details()
+            self.input_index = self.input_details[0]['index']
+            self.output_index = self.output_details[0]['index']
+            self.input_dtype = self.input_details[0]['dtype']
+            self.output_dtype = self.output_details[0]['dtype']
+
+    def predict_proba(self, x_float: np.ndarray) -> np.ndarray:
+        """
+        Executa predição em lote e retorna probabilidades em float32.
+
+        Parâmetros:
+            x_float: batch de entradas normalizadas em float32.
+
+        Retorna:
+            np.ndarray: batch de saídas em float32 (dequantizado quando necessário).
+        """
+        # Garante batch
+        if x_float.ndim == 3:
+            # Adiciona canal quando necessário
+            x_float = x_float[..., np.newaxis]
+        if x_float.ndim == 2:
+            x_float = x_float[np.newaxis, ...]
+
+        outputs = []
+        for i in range(x_float.shape[0]):
+            x_in = x_float[i:i+1]
+
+            # Ajusta shape dinâmico
+            self._ensure_shape(x_in)
+
+            # Converte dtype conforme modelo
+            if self.input_dtype == np.int8:
+                # Para quantização INT8, aplica escala/zero-point
+                if self.input_scale == 0:
+                    raise ValueError("Input scale 0 detectado para INT8. Verifique o modelo TFLite.")
+                x_cast = (x_in / self.input_scale + self.input_zero_point).astype(np.int8)
+            else:
+                x_cast = x_in.astype(self.input_dtype)
+
+            self.interpreter.set_tensor(self.input_index, x_cast)
+            self.interpreter.invoke()
+            y = self.interpreter.get_tensor(self.output_index)
+
+            # Dequantiza quando saída é INT8
+            if self.output_dtype == np.int8:
+                y = (y.astype(np.float32) - self.output_zero_point) * self.output_scale
+            else:
+                y = y.astype(np.float32)
+
+            outputs.append(y[0])
+
+        return np.stack(outputs, axis=0)
+
+def _resolve_tflite_path() -> Path:
+    """
+    Resolve o caminho do arquivo TFLite usando variáveis de ambiente.
+    Prioridade:
+      1) TFLITE_MODEL_PATH
+      2) TFLITE_MODEL_DIR contendo model_int8.tflite, model_dynamic.tflite ou model_fp16.tflite
+    """
+    if TFLITE_MODEL_PATH:
+        p = Path(TFLITE_MODEL_PATH)
+        if p.exists():
+            return p
+    if TFLITE_MODEL_DIR:
+        base = Path(TFLITE_MODEL_DIR)
+        for name in ["model_int8.tflite", "model_dynamic.tflite", "model_fp16.tflite"]:
+            cand = base / name
+            if cand.exists():
+                return cand
+        # fallback para qualquer .tflite
+        for cand in base.glob("*.tflite"):
+            return cand
+    raise FileNotFoundError("Arquivo TFLite não encontrado. Defina TFLITE_MODEL_PATH ou TFLITE_MODEL_DIR.")
 
 
 # ## Configuring the data parameters and adapters
@@ -140,9 +256,14 @@ trained_best_models={}
 for model_name in list_of_models:
     print(model_name)
     checkpoint_filepath =f'{classifcation_model_path}/model_{model_name}_crypto_{cryptos[0]}_{sufix}'
-    trained_best_models[f'{model_name}']=tf.keras.models.load_model(
-        checkpoint_filepath,
-        custom_objects={'loss': weighted_categorical_crossentropy_loss, 'matthews_correlation_coefficient': matthews_correlation_coefficient})
+    if MODEL_BACKEND == 'tflite':
+        # Usa um único modelo TFLite para todos (geral)
+        tflite_path = _resolve_tflite_path()
+        trained_best_models[f'{model_name}'] = TFLiteModel(tflite_path)
+    else:
+        trained_best_models[f'{model_name}']=tf.keras.models.load_model(
+            checkpoint_filepath,
+            custom_objects={'loss': weighted_categorical_crossentropy_loss, 'matthews_correlation_coefficient': matthews_correlation_coefficient})
 
 
 # ### Get the list of all used models
@@ -194,10 +315,16 @@ for crypto in cryptos:
        
     with open(f'{checkpoint_filepath}/config.json', 'r') as file:
         parameters = json.load(file)
-
-    trained_model=tf.keras.models.load_model(
-            checkpoint_filepath,
-            custom_objects={'loss': weighted_categorical_crossentropy_loss, 'matthews_correlation_coefficient': matthews_correlation_coefficient})
+    
+    # Seleciona backend do modelo
+    if MODEL_BACKEND == 'tflite':
+        trained_model = TFLiteModel(_resolve_tflite_path())
+        backend = 'tflite'
+    else:
+        trained_model = tf.keras.models.load_model(
+                checkpoint_filepath,
+                custom_objects={'loss': weighted_categorical_crossentropy_loss, 'matthews_correlation_coefficient': matthews_correlation_coefficient})
+        backend = 'keras'
 
 
     # Escolha o intervalo
@@ -225,6 +352,7 @@ for crypto in cryptos:
           "crypto": crypto,
           "dataGen_inference":dataGen_inference,
           "trained_model": trained_model,
+          "backend": backend,
           "time_operation": interval
       },
       "parameters": {
@@ -380,7 +508,13 @@ def check_and_execute(model=None, dataGen_inference=None, symbol='BTC', TH=[0.5,
         x_data = np.transpose(x_data, [0, 2, 1]).reshape(-1, dataGen_inference.inputShape[1], dataGen_inference.inputShape[2], 1)
         
     # Use the trained model and make predictions
-    label_pred = model.predict(x_data)
+    # Suporta Keras e TFLite
+    if hasattr(model, 'predict'):
+        label_pred = model.predict(x_data)
+    elif isinstance(model, TFLiteModel):
+        label_pred = model.predict_proba(x_data)
+    else:
+        raise ValueError("Modelo não suportado. Esperado Keras Model ou TFLiteModel.")
     
     # Generate trade signalvs based on the predictions
     trade_signals = np.array([
@@ -466,6 +600,7 @@ while True:
             TH=trained_model_json['inference']['TH']
             last_timestamp=trained_model_json['inference']['timestamp']
             balance=trained_model_json['profit']['balance']
+            backend=trained_model_json['configurations'].get('backend', MODEL_BACKEND)
 
             # Check and execute trades
             label_pred, last_timestamp, balance = check_and_execute(classification_model, dataGen_inference, symbol, TH,last_timestamp, interval, balance)
