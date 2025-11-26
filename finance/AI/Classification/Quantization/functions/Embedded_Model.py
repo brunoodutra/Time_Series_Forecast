@@ -1,7 +1,14 @@
 import numpy as np
 import time
-#from tflite_runtime.interpreter import Interpreter
-from tensorflow.lite.python.interpreter import Interpreter
+
+# Interpreter import fallback: try tflite_runtime, then TensorFlow
+try:
+    from tflite_runtime.interpreter import Interpreter
+except Exception:
+    try:
+        from tensorflow.lite.python.interpreter import Interpreter
+    except Exception:
+        Interpreter = None
 
 class Embedded_Model():
     
@@ -68,7 +75,10 @@ class Embedded_Model():
         Returns:
             interpreter (Interpreter): TFLite model
         '''
-
+        if Interpreter is None:
+            raise ImportError(
+                "Nenhum backend TFLite disponível. Instale 'tflite-runtime' (preferível) ou 'tensorflow'."
+            )
         interpreter = Interpreter(self.destination_path+'.tflite')  # Load TFLite model from model path
         interpreter.allocate_tensors()                        # Allocate model tensors
         
