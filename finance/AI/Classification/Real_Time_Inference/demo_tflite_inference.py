@@ -20,10 +20,16 @@ import importlib
 
 
 def _attach_processing_path() -> None:
-    """Adiciona o diretório Processing ao sys.path para permitir importações internas."""
-    processing_source_path = os.path.abspath('./../../Processing/')
+    """Adiciona o diretório `finance/Processing` ao sys.path para permitir importações internas."""
+    processing_source_path = os.path.abspath('../../../Processing')
     if processing_source_path not in sys.path:
         sys.path.append(processing_source_path)
+
+def _attach_quant_functions_path() -> None:
+    """Adiciona o diretório `Quantization/functions` ao sys.path para usar Embedded_Model."""
+    quant_funcs_path = os.path.abspath('../Quantization/functions')
+    if quant_funcs_path not in sys.path:
+        sys.path.append(quant_funcs_path)
 
 
 def load_parameters(model_dir: Path) -> dict:
@@ -140,10 +146,19 @@ def main():
     parser.add_argument('--samples', type=int, default=5, help='Número de amostras para exibir')
     parser.add_argument('--backend', type=str, default='auto', choices=['auto','tf','tflite_runtime'], help='Backend para o Interpreter TFLite')
     parser.add_argument('--dry_run', action='store_true', help='Executa pipeline de dados sem inferência (útil quando não há backend disponível)')
+    parser.add_argument('--use_embedded', action='store_true', help='Usa funções de Quantization/functions (Embedded_Model) para inferência')
     args = parser.parse_args()
 
     _attach_processing_path()
+    _attach_quant_functions_path()
     from DataLoaderPipeline import FeaturesDataGenerator, scrapingHistoricalData
+    # Tenta importar Embedded_Model
+    Embedded_Model = None
+    try:
+        from Embedded_Model import Embedded_Model as _EM
+        Embedded_Model = _EM
+    except Exception:
+        Embedded_Model = None
 
     # Carrega parâmetros do modelo
     parameters = load_parameters(Path(args.model_dir))
@@ -171,26 +186,38 @@ def main():
     if parameters.get('datatype', '2D') == '2D':
         x_float = np.transpose(x_float, [0, 2, 1]).reshape(-1, dataGen.inputShape[1], dataGen.inputShape[2], 1)
 
-    # Cria Interpreter do TFLite
-    interpreter = _create_interpreter(Path(args.tflite_path), backend=args.backend)
-    if interpreter is None:
-        print('Nenhum backend TFLite disponível (TensorFlow ou tflite-runtime).')
-        print('Dicas:')
-        print(' - Em Windows, TensorFlow costuma ser o caminho mais estável:')
-        print('   Use Python 3.11/3.12 e instale: pip install tensorflow')
-        print(' - Alternativamente: pip install tflite-runtime (se houver wheel para sua plataforma).')
-        print('Como não há backend disponível, entrarei em modo dry-run do pipeline.')
-        print('Shape de x_float preparado:', x_float.shape)
-        if not args.dry_run:
-            print('Para executar inferência real, configure o backend e rode novamente sem --dry_run.')
-            return
-        # Modo dry-run: sem inferência, apenas finaliza com saída amigável.
-        print('Dry-run concluído. Nenhuma inferência foi executada.')
-        return
+    # Seleciona runner: Embedded_Model (se pedido e disponível) ou Interpreter direto
+    preds = None
+    if args.use_embedded and Embedded_Model is not None:
+        try:
+            # Embedded_Model espera destination_path sem a extensão .tflite
+            dest_no_ext = str(Path(args.tflite_path).with_suffix(''))
+            em = Embedded_Model(destination_path=dest_no_ext)
+            preds = em.predict_batch_data(x_float)
+        except Exception as e:
+            print('Falha ao usar Embedded_Model, caindo para Interpreter direto:', e)
 
-    # Executa inferência TFLite
-    tm = TFLiteModel(interpreter)
-    preds = tm.predict_proba(x_float)
+    if preds is None:
+        # Cria Interpreter do TFLite
+        interpreter = _create_interpreter(Path(args.tflite_path), backend=args.backend)
+        if interpreter is None:
+            print('Nenhum backend TFLite disponível (TensorFlow ou tflite-runtime).')
+            print('Dicas:')
+            print(' - Em Windows, TensorFlow costuma ser o caminho mais estável:')
+            print('   Use Python 3.11/3.12 e instale: pip install tensorflow')
+            print(' - Alternativamente: pip install tflite-runtime (se houver wheel para sua plataforma).')
+            print('Como não há backend disponível, entrarei em modo dry-run do pipeline.')
+            print('Shape de x_float preparado:', x_float.shape)
+            if not args.dry_run:
+                print('Para executar inferência real, configure o backend e rode novamente sem --dry_run.')
+                return
+            # Modo dry-run: sem inferência, apenas finaliza com saída amigável.
+            print('Dry-run concluído. Nenhuma inferência foi executada.')
+            return
+
+        # Executa inferência TFLite
+        tm = TFLiteModel(interpreter)
+        preds = tm.predict_proba(x_float)
 
     # Gera sinais
     TH = parameters.get('TH', [0.5, 0.5, 0.5])
