@@ -22,8 +22,8 @@ import importlib
 def _attach_processing_path() -> None:
     """Adiciona o diretório `finance/Processing` ao sys.path baseado no caminho do arquivo."""
     here = Path(__file__).resolve()
-    finance_root = here.parents[3]  # .../finance
-    processing_source_path = str(finance_root / 'Processing')
+    ai_root = here.parents[2]  # .../AI
+    processing_source_path = str(ai_root / 'Processing')
     if processing_source_path not in sys.path:
         sys.path.append(processing_source_path)
 
