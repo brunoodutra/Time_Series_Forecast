@@ -13,10 +13,10 @@ import sys
 import json
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import List
+from typing import List, Optional
 
 import numpy as np
-import tensorflow as tf
+import importlib
 
 
 def _attach_processing_path() -> None:
@@ -35,10 +35,49 @@ def load_parameters(model_dir: Path) -> dict:
         return json.load(f)
 
 
+def _create_interpreter(tflite_path: Path, backend: str = 'auto') -> Optional[object]:
+    """Cria um Interpreter para TFLite tentando TensorFlow ou tflite_runtime.
+
+    - backend='tf': força uso de TensorFlow (`tf.lite.Interpreter`).
+    - backend='tflite_runtime': força uso de `tflite_runtime.Interpreter`.
+    - backend='auto': tenta TensorFlow e, se falhar, tenta tflite_runtime.
+
+    Retorna o objeto Interpreter ou None se nenhum backend estiver disponível.
+    """
+    tf_mod = None
+    tr_mod = None
+    if backend in ('auto', 'tf'):
+        try:
+            tf_mod = importlib.import_module('tensorflow')
+        except Exception:
+            tf_mod = None
+    if backend in ('auto', 'tflite_runtime') and tf_mod is None:
+        try:
+            tr_mod = importlib.import_module('tflite_runtime.interpreter')
+        except Exception:
+            tr_mod = None
+
+    if tf_mod is not None:
+        try:
+            return tf_mod.lite.Interpreter(model_path=str(tflite_path))
+        except Exception:
+            return None
+    if tr_mod is not None:
+        try:
+            return tr_mod.Interpreter(model_path=str(tflite_path))
+        except Exception:
+            return None
+    return None
+
+
 class TFLiteModel:
     """Wrapper para executar inferência com TFLite (suporta float e int8)."""
-    def __init__(self, tflite_path: Path):
-        self.interpreter = tf.lite.Interpreter(model_path=str(tflite_path))
+    def __init__(self, interpreter: object):
+        """Inicializa o wrapper com um Interpreter já criado.
+
+        interpreter: instância de `tf.lite.Interpreter` ou `tflite_runtime.Interpreter`.
+        """
+        self.interpreter = interpreter
         self.interpreter.allocate_tensors()
         self.input_details = self.interpreter.get_input_details()
         self.output_details = self.interpreter.get_output_details()
@@ -99,6 +138,8 @@ def main():
     parser.add_argument('--interval', type=str, default='4h', help='Intervalo (ex.: 1h, 4h, 1d)')
     parser.add_argument('--window_days', type=int, default=60, help='Dias de janela para coleta de dados')
     parser.add_argument('--samples', type=int, default=5, help='Número de amostras para exibir')
+    parser.add_argument('--backend', type=str, default='auto', choices=['auto','tf','tflite_runtime'], help='Backend para o Interpreter TFLite')
+    parser.add_argument('--dry_run', action='store_true', help='Executa pipeline de dados sem inferência (útil quando não há backend disponível)')
     args = parser.parse_args()
 
     _attach_processing_path()
@@ -130,8 +171,25 @@ def main():
     if parameters.get('datatype', '2D') == '2D':
         x_float = np.transpose(x_float, [0, 2, 1]).reshape(-1, dataGen.inputShape[1], dataGen.inputShape[2], 1)
 
-    # Carrega TFLite e executa inferência
-    tm = TFLiteModel(Path(args.tflite_path))
+    # Cria Interpreter do TFLite
+    interpreter = _create_interpreter(Path(args.tflite_path), backend=args.backend)
+    if interpreter is None:
+        print('Nenhum backend TFLite disponível (TensorFlow ou tflite-runtime).')
+        print('Dicas:')
+        print(' - Em Windows, TensorFlow costuma ser o caminho mais estável:')
+        print('   Use Python 3.11/3.12 e instale: pip install tensorflow')
+        print(' - Alternativamente: pip install tflite-runtime (se houver wheel para sua plataforma).')
+        print('Como não há backend disponível, entrarei em modo dry-run do pipeline.')
+        print('Shape de x_float preparado:', x_float.shape)
+        if not args.dry_run:
+            print('Para executar inferência real, configure o backend e rode novamente sem --dry_run.')
+            return
+        # Modo dry-run: sem inferência, apenas finaliza com saída amigável.
+        print('Dry-run concluído. Nenhuma inferência foi executada.')
+        return
+
+    # Executa inferência TFLite
+    tm = TFLiteModel(interpreter)
     preds = tm.predict_proba(x_float)
 
     # Gera sinais
