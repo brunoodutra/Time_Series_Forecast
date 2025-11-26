@@ -151,11 +151,22 @@ def main():
     parser.add_argument('--backend', type=str, default='auto', choices=['auto','tf','tflite_runtime'], help='Backend para o Interpreter TFLite')
     parser.add_argument('--dry_run', action='store_true', help='Executa pipeline de dados sem inferência (útil quando não há backend disponível)')
     parser.add_argument('--use_embedded', action='store_true', help='Usa funções de Quantization/functions (Embedded_Model) para inferência')
+    parser.add_argument('--skip_pipeline', action='store_true', help='Pula a geração de features/normalização (útil quando Keras/TensorFlow não estão instalados)')
     args = parser.parse_args()
 
     _attach_processing_path()
     _attach_quant_functions_path()
-    from DataLoaderPipeline import FeaturesDataGenerator, scrapingHistoricalData
+    FeaturesDataGenerator = None
+    scrapingHistoricalData = None
+    if not args.skip_pipeline:
+        try:
+            from DataLoaderPipeline import FeaturesDataGenerator, scrapingHistoricalData
+        except Exception as e:
+            print('Falha ao importar DataLoaderPipeline, habilite --skip_pipeline para continuar. Erro:', e)
+            if args.dry_run:
+                args.skip_pipeline = True
+            else:
+                return
     # Tenta importar Embedded_Model
     Embedded_Model = None
     try:
@@ -167,28 +178,43 @@ def main():
     # Carrega parâmetros do modelo
     parameters = load_parameters(Path(args.model_dir))
 
-    # Coleta dados
-    SHD = scrapingHistoricalData()
-    start_time = (datetime.today() - timedelta(days=args.window_days)).strftime('%Y-%m-%d')
-    data_df = SHD.get_crypto_historical_data([args.symbol], args.interval, start_time)
+    # Coleta e prepara dados (ou cria amostra sintética se skip_pipeline)
+    if not args.skip_pipeline:
+        SHD = scrapingHistoricalData()
+        start_time = (datetime.today() - timedelta(days=args.window_days)).strftime('%Y-%m-%d')
+        data_df = SHD.get_crypto_historical_data([args.symbol], args.interval, start_time)
 
-    # Gera features e normaliza
-    dataGen = FeaturesDataGenerator(
-        data_df,
-        datatype=parameters.get('datatype', '2D'),
-        lookback=parameters['lookback'],
-        pred_days=parameters.get('pred_days', 0),
-        shuffle=False,
-        batch_size=32,
-        selected_features=parameters['features_indicators'],
-        data_augmentation=False,
-        min_max_norm_features=[parameters.get('min_norm', 0.0), parameters.get('max_norm', 1.0)],
-    )
+        dataGen = FeaturesDataGenerator(
+            data_df,
+            datatype=parameters.get('datatype', '2D'),
+            lookback=parameters['lookback'],
+            pred_days=parameters.get('pred_days', 0),
+            shuffle=False,
+            batch_size=32,
+            selected_features=parameters['features_indicators'],
+            data_augmentation=False,
+            min_max_norm_features=[parameters.get('min_norm', 0.0), parameters.get('max_norm', 1.0)],
+        )
 
-    x_inf = dataGen.comput_features(data_df, pred_days=0)
-    x_float = dataGen.apply_NomrMinmax(x_inf, parameters.get('min_norm', 0.0), parameters.get('max_norm', 1.0), axis=0)
-    if parameters.get('datatype', '2D') == '2D':
-        x_float = np.transpose(x_float, [0, 2, 1]).reshape(-1, dataGen.inputShape[1], dataGen.inputShape[2], 1)
+        x_inf = dataGen.comput_features(data_df, pred_days=0)
+        x_float = dataGen.apply_NomrMinmax(x_inf, parameters.get('min_norm', 0.0), parameters.get('max_norm', 1.0), axis=0)
+        if parameters.get('datatype', '2D') == '2D':
+            x_float = np.transpose(x_float, [0, 2, 1]).reshape(-1, dataGen.inputShape[1], dataGen.inputShape[2], 1)
+    else:
+        # Modo sem pipeline: prepara batch sintético para inspeção/execução controlada
+        print('Skip de pipeline ativado: criando batch sintético para validação.')
+        # Tenta obter shape do interpreter, senão usa um padrão
+        interpreter_probe = _create_interpreter(Path(args.tflite_path), backend=args.backend)
+        if interpreter_probe is not None:
+            interpreter_probe.allocate_tensors()
+            in_shape = interpreter_probe.get_input_details()[0]['shape']
+            # Garante pelo menos 1 amostra
+            if in_shape[0] == 0:
+                in_shape[0] = 1
+            x_float = np.zeros(in_shape, dtype=np.float32)
+        else:
+            # fallback: tensor 1x64x64x1
+            x_float = np.zeros((1, 64, 64, 1), dtype=np.float32)
 
     # Seleciona runner: Embedded_Model (se pedido e disponível) ou Interpreter direto
     preds = None
