@@ -1,5 +1,4 @@
 # Orquestração de serviços para inferência e agendamento no Raspberry via Docker
-version: '3.8'
 
 services:
   inference:
