@@ -256,7 +256,10 @@ def main():
     """
     args = parse_args()
 
-    project_root = Path(__file__).resolve().parents[3]
+    # Corrige a raiz do projeto: schedule_inference.py está em
+    # finance/AI/Classification/Real_Time_Inference; precisamos subir 4 níveis
+    # para chegar à raiz do repositório (ex.: /app ou Time_Series_Forecast).
+    project_root = Path(__file__).resolve().parents[4]
     demo_script = project_root / "finance" / "AI" / "Classification" / "Real_Time_Inference" / "demo_tflite_inference.py"
 
     python_exe = Path(sys.executable)
