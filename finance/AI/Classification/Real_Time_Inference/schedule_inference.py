@@ -3,6 +3,7 @@ import sys
 import time
 import subprocess
 from pathlib import Path
+from typing import List, Tuple, Optional
 
 
 def build_demo_command(
@@ -97,6 +98,104 @@ def run_inference_once(cmd, log_path: Path | None = None) -> int:
     return proc.returncode
 
 
+def discover_models(models_root: Path) -> List[Tuple[Path, Path]]:
+    """
+    Varre a pasta `models_root` e retorna pares `(tflite_path, model_dir)`.
+
+    Regras:
+    - Procura arquivos `*.tflite` (recursivo).
+    - Infere `model_dir` como uma pasta irmã com o mesmo nome do arquivo
+      sem extensão, contendo `config.json`.
+    - Ignora arquivos cujo diretório do modelo não seja encontrado.
+    """
+    pairs: List[Tuple[Path, Path]] = []
+    for tflite in models_root.rglob("*.tflite"):
+        candidate_dir = tflite.parent / tflite.stem
+        if (candidate_dir / "config.json").exists():
+            pairs.append((tflite, candidate_dir))
+        else:
+            print(f"Aviso: config.json não encontrado para {tflite.name}; esperado em {candidate_dir}")
+    # Ordena para execução determinística
+    pairs.sort(key=lambda p: p[0].name)
+    return pairs
+
+
+def run_auto_once(
+    python_executable: Path,
+    demo_script: Path,
+    models_root: Path,
+    backend: str,
+    use_embedded: bool,
+    samples: int,
+    skip_pipeline: bool,
+    symbol: str,
+    interval: str,
+    log_path: Optional[Path] = None,
+) -> None:
+    """
+    Executa uma passada única de inferência para todos os modelos .tflite
+    encontrados em `models_root`.
+    """
+    pairs = discover_models(models_root)
+    if not pairs:
+        print(f"Nenhum .tflite encontrado em {models_root}")
+        return
+    for tflite_path, model_dir in pairs:
+        cmd = build_demo_command(
+            python_executable,
+            demo_script,
+            tflite_path,
+            model_dir,
+            backend=backend,
+            use_embedded=use_embedded,
+            samples=samples,
+            skip_pipeline=skip_pipeline,
+            symbol=symbol,
+            interval=interval,
+        )
+        run_inference_once(cmd, log_path=log_path)
+
+
+def run_auto_scheduler_loop(
+    interval_sec: int,
+    python_executable: Path,
+    demo_script: Path,
+    models_root: Path,
+    backend: str,
+    use_embedded: bool,
+    samples: int,
+    skip_pipeline: bool,
+    symbol: str,
+    interval: str,
+    log_path: Optional[Path] = None,
+) -> None:
+    """
+    Executa, continuamente, inferências para todos os modelos em `models_root`
+    a cada `interval_sec` segundos, reavaliando a lista em cada ciclo.
+    """
+    print(f"Agendador AUTO iniciado. Pasta: {models_root}. Intervalo: {interval_sec}s. Ctrl+C para encerrar.")
+    try:
+        while True:
+            start_cycle = time.time()
+            run_auto_once(
+                python_executable,
+                demo_script,
+                models_root,
+                backend,
+                use_embedded,
+                samples,
+                skip_pipeline,
+                symbol,
+                interval,
+                log_path,
+            )
+            end_cycle = time.time()
+            print(f"Ciclo AUTO concluído em {end_cycle - start_cycle:.2f}s. Próximo em {interval_sec}s.")
+            time.sleep(interval_sec)
+    except KeyboardInterrupt:
+        print("Agendador AUTO finalizado pelo usuário.")
+
+
 def run_scheduler_loop(
     interval_sec: int,
     cmd_args: list[str],
@@ -127,8 +226,17 @@ def parse_args():
     Faz o parse dos argumentos de linha de comando para configurar o agendamento.
     """
     p = argparse.ArgumentParser(description="Agendador de inferência TFLite periódica")
-    p.add_argument("--tflite_path", required=True, type=str, help="Caminho para o arquivo .tflite")
-    p.add_argument("--model_dir", required=True, type=str, help="Pasta do modelo contendo config.json")
+    # Modo manual: requer tflite_path e model_dir
+    # Modo auto: varre pasta de modelos e ignora tflite_path/model_dir
+    p.add_argument("--tflite_path", type=str, help="Caminho para o arquivo .tflite (modo manual)")
+    p.add_argument("--model_dir", type=str, help="Pasta do modelo contendo config.json (modo manual)")
+    p.add_argument("--auto", action="store_true", help="Ativa modo auto: executa todos os .tflite de uma pasta de modelos")
+    p.add_argument(
+        "--models_root",
+        type=str,
+        default="",
+        help="Pasta raiz de modelos (.tflite). Padrão: Experiments/Cryptos/models do projeto",
+    )
     p.add_argument("--interval_sec", type=int, default=900, help="Intervalo em segundos entre execuções (padrão: 900 = 15 min)")
     p.add_argument("--backend", type=str, default="tf", choices=["tf", "tflite_runtime", "auto"], help="Backend para o Interpreter TFLite")
     p.add_argument("--use_embedded", action="store_true", help="Usa Embedded_Model para inferência")
@@ -152,28 +260,67 @@ def main():
     demo_script = project_root / "finance" / "AI" / "Classification" / "Real_Time_Inference" / "demo_tflite_inference.py"
 
     python_exe = Path(sys.executable)
-    tflite_path = Path(args.tflite_path)
-    model_dir = Path(args.model_dir)
     log_path = Path(args.log_path) if args.log_path else None
+    # Determina pasta padrão de modelos se não fornecida
+    default_models_root = project_root / "finance" / "AI" / "Classification" / "Experiments" / "Cryptos" / "models"
+    models_root = Path(args.models_root) if args.models_root else default_models_root
 
-    cmd = build_demo_command(
-        python_exe,
-        demo_script,
-        tflite_path,
-        model_dir,
-        backend=args.backend,
-        use_embedded=args.use_embedded,
-        samples=args.samples,
-        skip_pipeline=args.skip_pipeline,
-        symbol=args.symbol,
-        interval=args.interval,
-    )
-
-    if args.once:
-        code = run_inference_once(cmd, log_path=log_path)
-        sys.exit(code)
+    if args.auto:
+        # Modo AUTO: roda todos os modelos da pasta especificada
+        if args.once:
+            run_auto_once(
+                python_exe,
+                demo_script,
+                models_root,
+                backend=args.backend,
+                use_embedded=args.use_embedded,
+                samples=args.samples,
+                skip_pipeline=args.skip_pipeline,
+                symbol=args.symbol,
+                interval=args.interval,
+                log_path=log_path,
+            )
+            sys.exit(0)
+        else:
+            run_auto_scheduler_loop(
+                args.interval_sec,
+                python_exe,
+                demo_script,
+                models_root,
+                backend=args.backend,
+                use_embedded=args.use_embedded,
+                samples=args.samples,
+                skip_pipeline=args.skip_pipeline,
+                symbol=args.symbol,
+                interval=args.interval,
+                log_path=log_path,
+            )
     else:
-        run_scheduler_loop(args.interval_sec, cmd, log_path=log_path)
+        # Modo MANUAL: requer caminhos específicos
+        if not args.tflite_path or not args.model_dir:
+            print("Erro: forneça --tflite_path e --model_dir, ou use --auto.", file=sys.stderr)
+            sys.exit(2)
+        tflite_path = Path(args.tflite_path)
+        model_dir = Path(args.model_dir)
+
+        cmd = build_demo_command(
+            python_exe,
+            demo_script,
+            tflite_path,
+            model_dir,
+            backend=args.backend,
+            use_embedded=args.use_embedded,
+            samples=args.samples,
+            skip_pipeline=args.skip_pipeline,
+            symbol=args.symbol,
+            interval=args.interval,
+        )
+
+        if args.once:
+            code = run_inference_once(cmd, log_path=log_path)
+            sys.exit(code)
+        else:
+            run_scheduler_loop(args.interval_sec, cmd, log_path=log_path)
 
 
 if __name__ == "__main__":
