@@ -1,15 +1,14 @@
-# Lightweight multi-arch Python image suitable for Raspberry Pi (armv7/aarch64)
-# Installs tflite-runtime and minimal numeric libs to run TFLite inference.
-
-FROM python:3.11-slim-bookworm
+# Imagem baseada em Debian Bookworm, usando Python do sistema (compatível com armhf/aarch64)
+FROM debian:bookworm-slim
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip python-is-python3 \
     libatlas-base-dev tzdata python3-numpy \
     && rm -rf /var/lib/apt/lists/*
 
 # Install TFLite runtime (Coral repo provides multi-arch wheels) and common deps
-RUN pip install --no-cache-dir \
+RUN python -m pip install --no-cache-dir \
     --extra-index-url https://google-coral.github.io/py-repo/ \
     tflite-runtime requests
 
