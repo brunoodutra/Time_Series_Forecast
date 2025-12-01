@@ -5,13 +5,13 @@ FROM python:3.11-slim-bookworm
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libatlas-base-dev tzdata \
+    libatlas-base-dev tzdata python3-numpy \
     && rm -rf /var/lib/apt/lists/*
 
 # Install TFLite runtime (Coral repo provides multi-arch wheels) and common deps
 RUN pip install --no-cache-dir \
     --extra-index-url https://google-coral.github.io/py-repo/ \
-    tflite-runtime numpy requests
+    tflite-runtime requests
 
 WORKDIR /app
 
