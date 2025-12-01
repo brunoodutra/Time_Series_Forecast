@@ -29,8 +29,8 @@ services:
       - TZ=America/Sao_Paulo
     command: >
       python finance/AI/Classification/Real_Time_Inference/schedule_inference.py
-      --tflite_path /app/finance/AI/Classification/Experiments/Cryptos/models/model_CNN_MultiHead_2D_crypto_BTC_last.tflite
-      --model_dir /app/finance/AI/Classification/Experiments/Cryptos/models/model_CNN_MultiHead_2D_crypto_BTC_last
+      --auto
+      --models_root /app/finance/AI/Classification/Experiments/Cryptos/models
       --backend tflite_runtime
       --interval 900
       --log_path /logs/inference.log
