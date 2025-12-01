@@ -1,0 +1,37 @@
+# Orquestração de serviços para inferência e agendamento no Raspberry via Docker
+version: '3.8'
+
+services:
+  inference:
+    build: .
+    volumes:
+      - ${CODE_PATH}:/app
+    working_dir: /app
+    environment:
+      - TZ=America/Sao_Paulo
+    # Execução rápida sem pipeline para validar backend e integração
+    command: >
+      python finance/AI/Classification/Real_Time_Inference/demo_tflite_inference.py
+      --tflite_path /app/finance/AI/Classification/Experiments/Cryptos/models/model_CNN_MultiHead_2D_crypto_BTC_last.tflite
+      --model_dir /app/finance/AI/Classification/Experiments/Cryptos/models/model_CNN_MultiHead_2D_crypto_BTC_last
+      --samples 3
+      --backend tflite_runtime
+      --skip_pipeline
+    # Para usar o Interpreter direto, adicione --no_embedded ao comando acima
+
+  scheduler:
+    build: .
+    volumes:
+      - ${CODE_PATH}:/app
+      - ${LOG_PATH}:/logs
+    working_dir: /app
+    environment:
+      - TZ=America/Sao_Paulo
+    command: >
+      python finance/AI/Classification/Real_Time_Inference/schedule_inference.py
+      --tflite_path /app/finance/AI/Classification/Experiments/Cryptos/models/model_CNN_MultiHead_2D_crypto_BTC_last.tflite
+      --model_dir /app/finance/AI/Classification/Experiments/Cryptos/models/model_CNN_MultiHead_2D_crypto_BTC_last
+      --backend tflite_runtime
+      --interval 900
+      --log_path /logs/inference.log
+    restart: unless-stopped
