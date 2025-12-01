@@ -150,7 +150,10 @@ def main():
     parser.add_argument('--samples', type=int, default=5, help='Número de amostras para exibir')
     parser.add_argument('--backend', type=str, default='auto', choices=['auto','tf','tflite_runtime'], help='Backend para o Interpreter TFLite')
     parser.add_argument('--dry_run', action='store_true', help='Executa pipeline de dados sem inferência (útil quando não há backend disponível)')
-    parser.add_argument('--use_embedded', action='store_true', help='Usa funções de Quantization/functions (Embedded_Model) para inferência')
+    # Controle do runner Embedded_Model: por padrão usamos Embedded_Model; --no_embedded desativa
+    parser.add_argument('--use_embedded', dest='use_embedded', action='store_true', help='Usa Embedded_Model (Quantization/functions) para inferência [padrão]')
+    parser.add_argument('--no_embedded', dest='use_embedded', action='store_false', help='Desativa Embedded_Model e usa Interpreter direto')
+    parser.set_defaults(use_embedded=True)
     parser.add_argument('--skip_pipeline', action='store_true', help='Pula a geração de features/normalização (útil quando Keras/TensorFlow não estão instalados)')
     args = parser.parse_args()
 
