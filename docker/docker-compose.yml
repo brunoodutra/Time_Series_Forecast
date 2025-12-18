@@ -5,6 +5,7 @@ services:
     build: .
     volumes:
       - ${CODE_PATH:-..}:/app
+      - ${LOG_PATH:-../logs}:/logs
     working_dir: /app
     environment:
       - TZ=America/Sao_Paulo
@@ -16,6 +17,7 @@ services:
       --samples 3
       --backend tflite_runtime
       --skip_pipeline
+      --out_csv /logs/inference.csv
     # Para usar o Interpreter direto, adicione --no_embedded ao comando acima
 
   scheduler:
@@ -34,4 +36,5 @@ services:
       --skip_pipeline
       --interval 900
       --log_path /logs/inference.log
+      --out_csv /logs/inference.csv
     restart: unless-stopped
