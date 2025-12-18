@@ -31,6 +31,7 @@ services:
       --auto
       --models_root /app/finance/AI/Classification/Experiments/Cryptos/models
       --backend tflite_runtime
+      --skip_pipeline
       --interval 900
       --log_path /logs/inference.log
     restart: unless-stopped
