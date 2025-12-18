@@ -11,6 +11,7 @@ Este script:
 import os
 import sys
 import json
+import csv
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -137,6 +138,23 @@ def generate_signals(preds: np.ndarray, TH: List[float]) -> List[str]:
     return signals
 
 
+def _append_csv_row(csv_path: Path, row: dict, header_order: List[str]) -> None:
+    """Grava uma linha em CSV, criando cabeçalho se o arquivo não existir.
+
+    Parâmetros:
+    - csv_path: caminho do arquivo CSV de saída.
+    - row: dicionário com colunas e valores a serem gravados.
+    - header_order: ordem das colunas no arquivo.
+    """
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    file_exists = csv_path.exists() and csv_path.stat().st_size > 0
+    with open(csv_path, 'a', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=header_order)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow({k: row.get(k, '') for k in header_order})
+
+
 def main():
     """Ponto de entrada: coleta dados, gera features, executa TFLite e imprime sinais."""
     import argparse
@@ -152,6 +170,8 @@ def main():
     parser.add_argument('--dry_run', action='store_true', help='Executa pipeline de dados sem inferência (útil quando não há backend disponível)')
     # Controle do runner Embedded_Model: por padrão usamos Embedded_Model; --no_embedded desativa
     parser.add_argument('--use_embedded', dest='use_embedded', action='store_true', help='Usa Embedded_Model (Quantization/functions) para inferência [padrão]')
+    # Persistência opcional de resultados por ciclo em CSV
+    parser.add_argument('--out_csv', type=str, default='', help='Arquivo CSV para registrar resultados de inferência por ciclo')
     parser.add_argument('--no_embedded', dest='use_embedded', action='store_false', help='Desativa Embedded_Model e usa Interpreter direto')
     parser.set_defaults(use_embedded=True)
     parser.add_argument('--skip_pipeline', action='store_true', help='Pula a geração de features/normalização (útil quando Keras/TensorFlow não estão instalados)')
@@ -264,6 +284,26 @@ def main():
     # Exibe shape e exemplo de probabilidades
     print('Shape preds:', preds.shape)
     print('Exemplo de probs:', preds[-1])
+
+    # Persistência em CSV (última amostra do batch)
+    if args.out_csv:
+        last_probs = preds[-1].tolist()
+        last_signal = signals[-1]
+        now_iso = datetime.now().isoformat(timespec='seconds')
+        row = {
+            'timestamp': now_iso,
+            'symbol': args.symbol,
+            'interval': str(args.interval),
+            'model_name': Path(args.tflite_path).stem,
+            'backend': args.backend,
+            'use_embedded': str(bool(args.use_embedded)),
+            'hold_prob': last_probs[0] if len(last_probs) > 0 else '',
+            'buy_prob': last_probs[1] if len(last_probs) > 1 else '',
+            'sell_prob': last_probs[2] if len(last_probs) > 2 else '',
+            'signal': last_signal,
+        }
+        header = ['timestamp','symbol','interval','model_name','backend','use_embedded','hold_prob','buy_prob','sell_prob','signal']
+        _append_csv_row(Path(args.out_csv), row, header)
 
 
 if __name__ == '__main__':
