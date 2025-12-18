@@ -260,7 +260,9 @@ def main():
     # finance/AI/Classification/Real_Time_Inference; precisamos subir 4 níveis
     # para chegar à raiz do repositório (ex.: /app ou Time_Series_Forecast).
     project_root = Path(__file__).resolve().parents[4]
-    demo_script = project_root / "finance" / "AI" / "Classification" / "Real_Time_Inference" / "demo_tflite_inference.py"
+    # Usa caminho robusto baseado no próprio diretório deste arquivo,
+    # evitando duplicações caso project_root seja mal calculado.
+    demo_script = Path(__file__).resolve().parent / "demo_tflite_inference.py"
 
     python_exe = Path(sys.executable)
     log_path = Path(args.log_path) if args.log_path else None
