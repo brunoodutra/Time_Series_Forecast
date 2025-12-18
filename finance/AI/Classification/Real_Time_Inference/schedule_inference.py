@@ -17,6 +17,7 @@ def build_demo_command(
     skip_pipeline: bool,
     symbol: str,
     interval: str,
+    out_csv: Optional[str] = None,
 ):
     """
     Constrói a linha de comando para executar o demo TFLite com os parâmetros fornecidos.
@@ -57,6 +58,8 @@ def build_demo_command(
         cmd.append("--use_embedded")
     if skip_pipeline:
         cmd.append("--skip_pipeline")
+    if out_csv:
+        cmd.extend(["--out_csv", out_csv])
 
     return cmd
 
@@ -131,6 +134,7 @@ def run_auto_once(
     symbol: str,
     interval: str,
     log_path: Optional[Path] = None,
+    out_csv: Optional[str] = None,
 ) -> None:
     """
     Executa uma passada única de inferência para todos os modelos .tflite
@@ -152,6 +156,7 @@ def run_auto_once(
             skip_pipeline=skip_pipeline,
             symbol=symbol,
             interval=interval,
+            out_csv=out_csv,
         )
         run_inference_once(cmd, log_path=log_path)
 
@@ -168,6 +173,7 @@ def run_auto_scheduler_loop(
     symbol: str,
     interval: str,
     log_path: Optional[Path] = None,
+    out_csv: Optional[str] = None,
 ) -> None:
     """
     Executa, continuamente, inferências para todos os modelos em `models_root`
@@ -188,6 +194,7 @@ def run_auto_scheduler_loop(
                 symbol,
                 interval,
                 log_path,
+                out_csv,
             )
             end_cycle = time.time()
             print(f"Ciclo AUTO concluído em {end_cycle - start_cycle:.2f}s. Próximo em {interval_sec}s.")
@@ -245,6 +252,7 @@ def parse_args():
     p.add_argument("--symbol", type=str, default="BTC", help="Símbolo (ex.: BTC)")
     p.add_argument("--interval", type=str, default="4h", help="Intervalo de dados (ex.: 4h)")
     p.add_argument("--log_path", type=str, default="", help="Caminho opcional para arquivo de log de saídas")
+    p.add_argument("--out_csv", type=str, default="", help="Arquivo CSV para registrar resultados por ciclo")
     p.add_argument("--once", action="store_true", help="Executa apenas uma vez e encerra")
     return p.parse_args()
 
@@ -284,6 +292,7 @@ def main():
                 symbol=args.symbol,
                 interval=args.interval,
                 log_path=log_path,
+                out_csv=args.out_csv if args.out_csv else None,
             )
             sys.exit(0)
         else:
@@ -299,6 +308,7 @@ def main():
                 symbol=args.symbol,
                 interval=args.interval,
                 log_path=log_path,
+                out_csv=args.out_csv if args.out_csv else None,
             )
     else:
         # Modo MANUAL: requer caminhos específicos
@@ -319,6 +329,7 @@ def main():
             skip_pipeline=args.skip_pipeline,
             symbol=args.symbol,
             interval=args.interval,
+            out_csv=args.out_csv if args.out_csv else None,
         )
 
         if args.once:
