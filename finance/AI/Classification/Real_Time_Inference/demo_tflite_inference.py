@@ -155,6 +155,49 @@ def _append_csv_row(csv_path: Path, row: dict, header_order: List[str]) -> None:
         writer.writerow({k: row.get(k, '') for k in header_order})
 
 
+def _last_price_from_df(data_df) -> Optional[float]:
+    """Obtém o último preço de fechamento (Close) do DataFrame de dados.
+
+    Retorna None se o DataFrame não estiver disponível ou não contiver a coluna 'Close'.
+    """
+    try:
+        return float(data_df['Close'].iloc[-1])
+    except Exception:
+        return None
+
+
+def _compute_signal_gains_fibonacci(last_signal: str, data_df, lookback: int) -> Optional[dict]:
+    """Calcula os ganhos (alvos/stop) via níveis de Fibonacci para o último sinal.
+
+    - Usa a janela dos últimos `lookback` candles para obter `low`, `high` e `current`.
+    - Para 'Buy', usa (low, high);
+    - Para 'Sell', segue a lógica usada no notebook, invertendo (high, low) para refletir movimento descendente.
+    - Retorna um dicionário com perfis 'conservative', 'moderate' e 'aggressive', ou None em caso de erro.
+    """
+    try:
+        from MarketIndicators import ComputSignalGains
+    except Exception:
+        return None
+
+    try:
+        window_df = data_df.iloc[-int(max(1, lookback)) :]
+        high_price = float(window_df['Close'].max())
+        low_price = float(window_df['Close'].min())
+        current_price = float(window_df['Close'].iloc[-1])
+
+        csg = ComputSignalGains()
+        side = last_signal.lower()
+        if side == 'buy':
+            return csg.calculate_Gains_Fibonacci(current_price, low_price, high_price, side='buy')
+        elif side == 'sell':
+            # Mantém compatibilidade com implementação anterior (ordem invertida)
+            return csg.calculate_Gains_Fibonacci(current_price, high_price, low_price, side='sell')
+        else:
+            return None
+    except Exception:
+        return None
+
+
 def main():
     """Ponto de entrada: coleta dados, gera features, executa TFLite e imprime sinais."""
     import argparse
@@ -290,6 +333,18 @@ def main():
         last_probs = preds[-1].tolist()
         last_signal = signals[-1]
         now_iso = datetime.now().isoformat(timespec='seconds')
+        # Price e SignalGains disponíveis somente quando a pipeline está ativa
+        price_val = None
+        signal_gains = None
+        if not args.skip_pipeline:
+            price_val = _last_price_from_df(data_df)
+            if last_signal != 'Hold':
+                try:
+                    lb = getattr(dataGen, 'lookback', 1)
+                except Exception:
+                    lb = 1
+                signal_gains = _compute_signal_gains_fibonacci(last_signal, data_df, lb)
+
         row = {
             'timestamp': now_iso,
             'symbol': args.symbol,
@@ -301,8 +356,10 @@ def main():
             'buy_prob': last_probs[1] if len(last_probs) > 1 else '',
             'sell_prob': last_probs[2] if len(last_probs) > 2 else '',
             'signal': last_signal,
+            'price': price_val if price_val is not None else '',
+            'signal_gains': json.dumps(signal_gains) if signal_gains is not None else '',
         }
-        header = ['timestamp','symbol','interval','model_name','backend','use_embedded','hold_prob','buy_prob','sell_prob','signal']
+        header = ['timestamp','symbol','interval','model_name','backend','use_embedded','hold_prob','buy_prob','sell_prob','signal','price','signal_gains']
         _append_csv_row(Path(args.out_csv), row, header)
 
 
