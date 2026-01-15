@@ -29,9 +29,11 @@ import joblib
 
 
 import os, sys
-processing_source_path = os.path.abspath('./../../Processing/')
-if(processing_source_path not in sys.path):
-    sys.path.append(processing_source_path)
+# Resolve Processing path relative to this file location (robust to CWD)
+_this_dir = Path(__file__).resolve().parent
+_processing_dir = _this_dir.parents[1] / "Processing"
+if str(_processing_dir) not in sys.path:
+    sys.path.insert(0, str(_processing_dir))
 from DataLoaderPipeline import FeaturesDataGenerator, scrapingHistoricalData
 #from MarketDataCollector import scrapingHistoricalData
 
@@ -131,6 +133,29 @@ class TFLiteModel:
 
         return np.stack(outputs, axis=0)
 
+try:
+    from keras.layers import TFSMLayer
+    _HAS_TFSMLAYER = True
+except Exception:
+    _HAS_TFSMLAYER = False
+
+class TFServingModel:
+    def __init__(self, model_dir: Path, call_endpoint: str = 'serving_default'):
+        self.layer = TFSMLayer(str(Path(model_dir)), call_endpoint=call_endpoint)
+        self.output_key = os.getenv('TF_OUTPUT_KEY', '')
+    def predict(self, x: np.ndarray) -> np.ndarray:
+        y = self.layer(x)
+        if isinstance(y, dict):
+            if self.output_key and self.output_key in y:
+                y = y[self.output_key]
+            else:
+                y = next(iter(y.values()))
+        try:
+            return _ensure_preds_2d(y)
+        except Exception:
+            y_np = y.numpy() if hasattr(y, "numpy") else np.array(y)
+            return _ensure_preds_2d(y_np)
+
 def _resolve_tflite_path() -> Path:
     """
     Resolve o caminho do arquivo TFLite usando variáveis de ambiente.
@@ -188,8 +213,24 @@ checkpoint_filepath =f'{classifcation_model_path}/model_{list_of_models[0]}_cryp
 
 import json
 # JSON file
-with open(f'{checkpoint_filepath}/config.json', 'r') as file:
-    parameters = json.load(file)
+parameters = {}
+try:
+    with open(f'{checkpoint_filepath}/config.json', 'r') as file:
+        parameters = json.load(file)
+except FileNotFoundError:
+    parameters = {
+        'features_indicators': None,
+        'lookback': 22,
+        'pred_days': 1,
+        'shuffle': False,
+        'batch_size': 1,
+        'data_augmentation': False,
+        'min_norm': -1,
+        'max_norm': 1,
+        'TH': [0.5, 0.5, 0.5],
+        'symbol': [cryptos[0]]
+    }
+    print(f"config.json não encontrado em {checkpoint_filepath}. Usando parâmetros padrão.")
 
 for parameter in parameters:
     print(f'{parameter}:{parameters[parameter]}')
@@ -198,14 +239,11 @@ for parameter in parameters:
 # In[7]:
 
 
-features_indicators=parameters['features_indicators']
-features_indicators
+features_indicators = parameters.get('features_indicators')
 
 
 # In[8]:
 
-
-input_shape = (parameters['lookback'], len(features_indicators))
 
 min_norm=parameters['min_norm']
 max_norm=parameters['max_norm']
@@ -216,17 +254,7 @@ trade=['Hold','Buy','Sell']
 # In[9]:
 
 
-dataGen_inference = FeaturesDataGenerator(
-    cryptos_df, 
-    datatype=datatype, 
-    lookback = parameters['lookback'], 
-    pred_days = parameters['pred_days'], 
-    shuffle= parameters['shuffle'], 
-    batch_size=parameters['batch_size'], 
-    selected_features = parameters['features_indicators'], 
-    data_augmentation=parameters['data_augmentation'], 
-    min_max_norm_features=[parameters['min_norm'], parameters['max_norm']]
-)
+# dataGen_inference será criado por cripto posteriormente
 
 
 # ### Load the model
@@ -235,7 +263,8 @@ dataGen_inference = FeaturesDataGenerator(
 
 
 from keras import backend as K
-weighted_categorical_crossentropy_loss= dataGen_inference.weighted_categorical_crossentropy(np.ones(3))
+from CustomTrainLosses import CustomTrainLosses
+weighted_categorical_crossentropy_loss = CustomTrainLosses().weighted_categorical_crossentropy(np.ones(3))
 
 def matthews_correlation_coefficient(y_true, y_pred):
     tp = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
@@ -250,20 +279,27 @@ def matthews_correlation_coefficient(y_true, y_pred):
 
 # In[11]:
 
-
-import tensorflow_addons as tfa
 trained_best_models={}
 for model_name in list_of_models:
     print(model_name)
     checkpoint_filepath =f'{classifcation_model_path}/model_{model_name}_crypto_{cryptos[0]}_{sufix}'
-    if MODEL_BACKEND == 'tflite':
-        # Usa um único modelo TFLite para todos (geral)
-        tflite_path = _resolve_tflite_path()
-        trained_best_models[f'{model_name}'] = TFLiteModel(tflite_path)
-    else:
-        trained_best_models[f'{model_name}']=tf.keras.models.load_model(
-            checkpoint_filepath,
-            custom_objects={'loss': weighted_categorical_crossentropy_loss, 'matthews_correlation_coefficient': matthews_correlation_coefficient})
+    try:
+        if MODEL_BACKEND == 'tflite':
+            # Usa um único modelo TFLite para todos (geral)
+            tflite_path = _resolve_tflite_path()
+            trained_best_models[f'{model_name}'] = TFLiteModel(tflite_path)
+        else:
+            trained_best_models[f'{model_name}']=tf.keras.models.load_model(
+                checkpoint_filepath,
+                compile=False)
+    except Exception as e:
+        if _HAS_TFSMLAYER and Path(checkpoint_filepath).exists():
+            try:
+                trained_best_models[f'{model_name}'] = TFServingModel(checkpoint_filepath, 'serving_default')
+            except Exception as e2:
+                print(f'Falha ao carregar modelo inicial {model_name}: {e2}')
+        else:
+            print(f'Falha ao carregar modelo inicial {model_name}: {e}')
 
 
 # ### Get the list of all used models
@@ -313,18 +349,38 @@ for crypto in cryptos:
        checkpoint_filepath =f'{classifcation_model_path}/model_CNN_restnet_MultiHead_2D_crypto_General_{sufix}'
        mode= 'general'
        
-    with open(f'{checkpoint_filepath}/config.json', 'r') as file:
+    cfg_path = f'{checkpoint_filepath}/config.json'
+    if not os.path.exists(cfg_path):
+        print(f'Config não encontrado: {cfg_path}. Pulando {crypto}-{model_name}.')
+        continue
+    with open(cfg_path, 'r') as file:
         parameters = json.load(file)
     
     # Seleciona backend do modelo
     if MODEL_BACKEND == 'tflite':
-        trained_model = TFLiteModel(_resolve_tflite_path())
-        backend = 'tflite'
+        try:
+            trained_model = TFLiteModel(_resolve_tflite_path())
+            backend = 'tflite'
+        except Exception as e:
+            print(f'TFLite não disponível para {crypto}-{model_name}: {e}')
+            continue
     else:
-        trained_model = tf.keras.models.load_model(
-                checkpoint_filepath,
-                custom_objects={'loss': weighted_categorical_crossentropy_loss, 'matthews_correlation_coefficient': matthews_correlation_coefficient})
-        backend = 'keras'
+        try:
+            trained_model = tf.keras.models.load_model(
+                    checkpoint_filepath,
+                    compile=False)
+            backend = 'keras'
+        except Exception as e:
+            if _HAS_TFSMLAYER and Path(checkpoint_filepath).exists():
+                try:
+                    trained_model = TFServingModel(checkpoint_filepath, 'serving_default')
+                    backend = 'keras'
+                except Exception as e2:
+                    print(f'TFSMLayer indisponível para {crypto}-{model_name}: {e2}')
+                    continue
+            else:
+                print(f'Modelo Keras indisponível para {crypto}-{model_name}: {e}')
+                continue
 
 
     # Escolha o intervalo
@@ -375,13 +431,13 @@ for crypto in cryptos:
 # In[31]:
 
 
-list_of_trained_models[2]
+pass
 
 
 # In[24]:
 
 
-list_of_trained_models[2]
+pass
 
 
 # ## Realtime Testing
@@ -454,6 +510,7 @@ def save_recommendation(model_name=str, crypto=str, data=None, recommendation=No
 
     # Create the file path
     file_path = f'Recommendations/{model_name}_{crypto}_recommendation.csv'
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
     # Check if the file exists
     if not os.path.exists(file_path):
@@ -467,6 +524,47 @@ def save_recommendation(model_name=str, crypto=str, data=None, recommendation=No
 
 
 # In[ ]:
+
+
+def _ensure_preds_2d(y):
+    def _find_numeric_leaf(val):
+        if hasattr(val, "numpy"):
+            return val
+        if isinstance(val, (np.ndarray, float, int)):
+            return val
+        if isinstance(val, dict):
+            for v in val.values():
+                leaf = _find_numeric_leaf(v)
+                if leaf is not None:
+                    return leaf
+        if isinstance(val, (list, tuple)) and len(val) > 0:
+            leaf = _find_numeric_leaf(val[0])
+            if leaf is not None:
+                return leaf
+        return None
+    leaf = _find_numeric_leaf(y)
+    if leaf is None:
+        raise ValueError("Predição não numérica. Estrutura inválida de saída do modelo.")
+    try:
+        y = leaf.numpy() if hasattr(leaf, "numpy") else leaf
+    except Exception:
+        y = leaf
+    y = np.array(y)
+    if y.ndim == 0:
+        y = y.reshape(1, 1)
+    elif y.ndim == 1:
+        y = y.reshape(1, -1) if y.shape[0] in (2, 3) else y.reshape(-1, 1)
+    elif y.ndim >= 3:
+        y = y.reshape(-1, y.shape[-1])
+    y = y.astype(np.float32)
+    if y.shape[-1] != 3:
+        fixed = np.zeros((y.shape[0], 3), dtype=np.float32)
+        if y.shape[-1] >= 3:
+            fixed[:, :] = y[:, :3]
+        else:
+            fixed[:, 0] = 1.0
+        y = fixed
+    return y
 
 
 def check_and_execute(model=None, dataGen_inference=None, symbol='BTC', TH=[0.5, 0.5, 0.5], last_timestamp=pd.Timestamp('2022-01-01 00:00:00'), interval='4h', balance=100.0):
@@ -515,6 +613,11 @@ def check_and_execute(model=None, dataGen_inference=None, symbol='BTC', TH=[0.5,
         label_pred = model.predict_proba(x_data)
     else:
         raise ValueError("Modelo não suportado. Esperado Keras Model ou TFLiteModel.")
+    try:
+        label_pred = _ensure_preds_2d(label_pred)
+    except Exception as e:
+        print(f'Predição inválida para {symbol}: {e}')
+        label_pred = np.tile(np.array([[1.0, 0.0, 0.0]], dtype=np.float32), (x_data.shape[0], 1))
     
     # Generate trade signalvs based on the predictions
     trade_signals = np.array([

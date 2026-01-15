@@ -687,7 +687,7 @@ class FeaturesDataGenerator(ComputIndicators, DatasetProcessing, CustomTrainLoss
             'Data_lookback': self.windowing(x_data['Close'].values.astype(np.float32), lookback = self.lookback, pred_days = 0),
             'Close': self.windowing(x_data['Close'].values.astype(np.float32), lookback = self.lookback, pred_days = 0),
             'Open': self.windowing(x_data['Open'].values.astype(np.float32), lookback = self.lookback, pred_days = 0),
-            'High': self.windowing(x_data['Volume'].values.astype(np.float32), lookback = self.lookback, pred_days = 0),
+            'High': self.windowing(x_data['High'].values.astype(np.float32), lookback = self.lookback, pred_days = 0),
             'Low': self.windowing(x_data['Low'].values.astype(np.float32), lookback = self.lookback, pred_days = 0),
             #'Adj Close': self.windowing(x_data['Adj Close'].values.astype(np.float32),lookback = self.lookback, pred_days = pred_days*2),
             'Volume': self.windowing(x_data['Volume'].values.astype(np.float32), lookback = self.lookback, pred_days = 0),
