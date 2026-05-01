@@ -666,7 +666,7 @@ def check_and_execute(model=None, dataGen_inference=None, symbol='BTC', TH=[0.5,
             # Check if it's a sell signal
             elif trade_signals[-2] == "Sell":
 
-                TradeGains = CSG.calculate_Gains_Fibonacci(input_price, high_price, low_price, side=trade_signals[-2])
+                TradeGains = CSG.calculate_Gains_Fibonacci(input_price, low_price, high_price, side=trade_signals[-2])
 
                 # Sell the cryptocurrency
                 if positions:  # Only sell if there are positions

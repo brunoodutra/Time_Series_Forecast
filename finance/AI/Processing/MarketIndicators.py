@@ -422,40 +422,68 @@ class ComputSignalGains():
         Returns:
         dict: A dictionary with targets and stops per risk profile.
         """
+        low_price = float(min(low_price, high_price))
+        high_price = float(max(low_price, high_price))
+        current_price = float(current_price)
+
+        if current_price <= 0:
+            raise ValueError("current_price must be positive.")
+
+        diff = max(high_price - low_price, current_price * 0.01)
         fibonacci = self.fibonacci_levels(low_price, high_price, current_price)
 
         if side.lower() == 'buy':
-            return {
+            profiles = {
                 'conservative': {
-                    'target': round(fibonacci['extension']['50%'], 4),
-                    'stop_loss': round(current_price - (2 * current_price * 0.01), 4)
+                    'target': max(fibonacci['extension']['50%'], current_price * 1.01),
+                    'stop_loss': min(current_price * 0.98, fibonacci['retracement']['38.2%'] * 0.995),
                 },
                 'moderate': {
-                    'target': round(fibonacci['extension']['61.8%'], 4),
-                    'stop_loss': round(fibonacci['retracement']['50%'] * 0.995, 4)
+                    'target': max(fibonacci['extension']['61.8%'], current_price * 1.015),
+                    'stop_loss': min(current_price * 0.985, fibonacci['retracement']['50%'] * 0.995),
                 },
                 'aggressive': {
-                    'target': round(fibonacci['extension']['100%'], 4),
-                    'stop_loss': round(fibonacci['retracement']['61.8%'] * 0.995, 4)
-                }
+                    'target': max(fibonacci['extension']['100%'], current_price * 1.02),
+                    'stop_loss': min(current_price * 0.99, fibonacci['retracement']['61.8%'] * 0.995, low_price * 0.999),
+                },
             }
-
         elif side.lower() == 'sell':
-            return {
+            downside_targets = {
+                '50%': current_price - (0.50 * diff),
+                '61.8%': current_price - (0.618 * diff),
+                '100%': current_price - diff,
+            }
+            upside_stops = {
+                '23.6%': current_price + (0.236 * diff),
+                '38.2%': current_price + (0.382 * diff),
+                '61.8%': current_price + (0.618 * diff),
+            }
+            profiles = {
                 'conservative': {
-                    'target': round(fibonacci['retracement']['61.8%'], 4),
-                    'stop_loss': round(fibonacci['extension']['100%'] * 1.005, 4)
+                    'target': min(downside_targets['50%'], current_price * 0.99),
+                    'stop_loss': max(upside_stops['23.6%'], current_price * 1.02),
                 },
                 'moderate': {
-                    'target': round(fibonacci['retracement']['50%'], 4),
-                    'stop_loss': round(fibonacci['extension']['131.8%'] * 1.005, 4)
+                    'target': min(downside_targets['61.8%'], current_price * 0.985),
+                    'stop_loss': max(upside_stops['38.2%'], current_price * 1.025),
                 },
                 'aggressive': {
-                    'target': round(fibonacci['retracement']['38.2%'], 4),
-                    'stop_loss': round(current_price + (2 * current_price * 0.01), 4)
-                }
+                    'target': min(downside_targets['100%'], current_price * 0.98),
+                    'stop_loss': max(upside_stops['61.8%'], high_price * 1.001),
+                },
             }
-
         else:
             raise ValueError("Invalid side. Use 'buy' or 'sell'.")
+
+        normalized_profiles = {
+            profile_name: {
+                'target': round(values['target'], 4),
+                'stop_loss': round(values['stop_loss'], 4),
+            }
+            for profile_name, values in profiles.items()
+        }
+        normalized_profiles['pessimistic'] = normalized_profiles['conservative'].copy()
+        normalized_profiles['normal'] = normalized_profiles['moderate'].copy()
+        normalized_profiles['optimistic'] = normalized_profiles['aggressive'].copy()
+        return normalized_profiles
 
