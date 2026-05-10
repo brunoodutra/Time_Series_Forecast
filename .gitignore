@@ -21,3 +21,4 @@ finance/Trade_Bot/logs*
 finance/Trade_Bot/data*
 .trae/*
 
+.env

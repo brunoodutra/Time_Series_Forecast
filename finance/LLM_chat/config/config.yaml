@@ -1,0 +1,96 @@
+# Exemplo de configuração YAML para o projeto Anatel
+# Copie para config/config.yaml e ajuste conforme necessário.
+logging:
+    LOG_LEVEL: "DEBUG"
+    
+paths:
+  # Diretório raiz com PDFs (conforme notebook)
+  data_dir: 
+        context: ""
+
+  # Diretório de persistência das coleções Chroma (conforme notebook)
+  persist_dir: "/chroma_db"
+  # Diretório com PDFs (se diferente de data_dir)
+  pdf_dir:
+      rules_advisor: ""
+  # Diretório onde outputs (artefatos/resultados) serão salvos
+  output_dir: "outputs"
+processing:
+  # Tamanho de chunk para processamento de documentos (segments)
+  chunk_size: 1024
+  # Sobreposição entre chunks
+  overlap: 200
+  deterministic_queries: true
+
+runtime:
+  # Dispositivo de execução (cpu ou cuda)
+  device: "cpu"
+
+embedding:
+  # Modelo e host usados no notebook
+  model: "ryanshillington/Qwen3-Embedding-0.6B:latest"
+  base_url: "http://ollama:11434" #"http://192.168.81.3:11435"
+
+llm:
+  provider: 'groq' #'openrouter'
+  # Modelos por finalidade, conforme notebook de produção
+  models:
+    #chat: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free" 
+    chat: "llama-3.3-70b-versatile"
+  # Parâmetros globais (ajuste conforme suporte do servidor/modelo)
+  params:
+    temperature: 0.0
+    max_new_tokens: 8192
+    num_ctx: 16384  # 2**14
+    top_k: 40
+    top_p: 0.9 
+    seed: 42
+
+  # Configuração de provedor específica (OpenRouter)
+  # Mapeia nome do modelo (ou substring) -> parâmetros de provider
+  provider_params:
+    "llama-3.3-70b-instruct":
+      quantizations: ["fp8"]
+      allow_fallbacks: true
+      require_parameters: false
+    "llama-3.1-8b":
+      quantizations: ["bf16"]
+      allow_fallbacks: false  
+      require_parameters: true
+    "gpt":
+        #quantizations: ["bf16"]
+        allow_fallbacks: false
+        #require_parameters: true
+    "deepseek-v3.1":
+      quantizations: ["fp8"]
+      allow_fallbacks: false
+      #require_parameters: true
+    "qwen3-30b-a3b":
+      quantizations: ["bf16"]
+      allow_fallbacks: false
+    "qwen3-next-80b-a3b":
+      quantizations: ["fp8"]
+      allow_fallbacks: false
+      require_parameters: true
+    "deepseek":
+      quantizations: ["fp8"]
+      allow_fallbacks: false
+      #require_parameters: true
+      #order: ["together"]
+      
+reranker:
+  hf_model_path: "/models/bge-reranker-v2-m3"
+  device: cpu
+  batch_size: 32
+  normalize: true
+
+vectorstore:
+  chroma_path: "/chroma_db"
+  prefix_rules: "rules"
+
+# Configurações de retrieval (Chroma)
+retrieval:
+  top_k: 30
+  fetch_k: 50
+  # Habilita reranqueamento dos segments recuperados
+  enable_reranker: true
