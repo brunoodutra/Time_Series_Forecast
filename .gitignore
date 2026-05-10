@@ -17,3 +17,7 @@ acoes/_pycache_/
 
 # Ignora tudo dentro de App_site
 finance/App_site/*
+finance/Trade_Bot/logs*
+finance/Trade_Bot/data*
+.trae/*
+

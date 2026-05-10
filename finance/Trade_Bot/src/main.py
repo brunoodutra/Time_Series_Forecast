@@ -23,6 +23,9 @@ def main():
 
     try:
         exchange = ExchangeClient()
+        if not exchange.validate_connection():
+            logger.error("Falha na validacao da conexao com a Binance Futures. Encerrando o bot para evitar operacao inconsistente.")
+            return
         state = StateManager()
         signals = SignalReader()
         manager = TradeManager(exchange, state)

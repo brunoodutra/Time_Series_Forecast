@@ -3,10 +3,10 @@
 :: - Aba 1: abre em finance\AI\Classification\Real_Time_Inference, ativa venv e executa o script
 :: - Abas 2 e 3: abrem na raiz do projeto com venv ativada para uso interativo
 
-set "ROOT=D:\Projetos_python\Time_Series_Forecast"
+set "ROOT=B:\projects\Time_Series_Forecast"
 set "INFER=%ROOT%\finance\AI\Classification\Real_Time_Inference"
 set "API=%ROOT%\finance\API"
-set "DASH=D:\Projetos_python\cryptodashpro\cryptodash-pro"
+set "DASH=B:\projects\cryptodash-pro"
 set "VENV_PS1=%ROOT%\.venv\Scripts\Activate.ps1"
 set "VENV_ACT=%ROOT%\.venv\Scripts\activate"
 

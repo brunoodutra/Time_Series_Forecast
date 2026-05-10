@@ -190,8 +190,7 @@ def _compute_signal_gains_fibonacci(last_signal: str, data_df, lookback: int) ->
         if side == 'buy':
             return csg.calculate_Gains_Fibonacci(current_price, low_price, high_price, side='buy')
         elif side == 'sell':
-            # Mantém compatibilidade com implementação anterior (ordem invertida)
-            return csg.calculate_Gains_Fibonacci(current_price, high_price, low_price, side='sell')
+            return csg.calculate_Gains_Fibonacci(current_price, low_price, high_price, side='sell')
         else:
             return None
     except Exception:
